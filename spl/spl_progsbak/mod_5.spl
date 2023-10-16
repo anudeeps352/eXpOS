@@ -1,0 +1,48 @@
+//SCHEDULER MODULE
+
+//take currentpid
+alias currentPID R0;
+currentPID=[SYSTEM_STATUS_TABLE +1];
+
+//push bp 
+multipush(BP);
+//maybe try saving process table 
+
+[PROCESS_TABLE + currentPID * 16 + 12] = SP % 512;
+[PROCESS_TABLE + currentPID * 16 + 14] = PTBR;
+[PROCESS_TABLE + currentPID * 16 + 15] = PTLR;
+
+alias newPID R3;
+alias count R2;
+count=1;
+newPID=currentPID+1;
+
+while((count<=16) && ([PROCESS_TABLE +(newPID *16)+4]!=READY) && ([PROCESS_TABLE + (newPID * 16)+4]!=CREATED))do
+
+  newPID=((newPID+1)%16);
+  count=count+1;
+endwhile;
+
+if(count ==17)then
+    newPID=0;
+endif;
+
+alias new_process_table R4;
+new_process_table = PROCESS_TABLE + newPID * 16;
+
+SP = [PROCESS_TABLE + newPID * 16 + 11]* 512 + [PROCESS_TABLE + newPID * 16 + 12];
+PTBR = [PROCESS_TABLE + newPID * 16 + 14];
+PTLR = [PROCESS_TABLE + newPID * 16 + 15];
+
+[SYSTEM_STATUS_TABLE + 1] = newPID;
+
+if([new_process_table + 4] == CREATED) then
+	[new_process_table + 4] = RUNNING;
+	SP = [new_process_table + 13];
+	[new_process_table + 9] = 0;
+ireturn;
+endif;
+
+[new_process_table+4] = RUNNING;
+multipop(BP);
+return;

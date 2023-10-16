@@ -1,0 +1,78 @@
+//process module
+alias funcNum R1;
+alias PID R2;
+
+PTBR=[PROCESS_TABLE + PID*16 + 14];
+
+
+
+//FREE USER AREA PAGE FUNCTION
+
+	if(funcNum == 2) then
+		
+		multipush(R1,R2,R3);
+		R1=2;					//Function number for RELEASE_PAGE in Memory Manager Module
+		R2=[PROCESS_TABLE + 16*PID +11];	//Storing User Area Page number of current process
+		call MEMORY_MANAGER;
+		multipop(R1,R2,R3);
+		
+		return;
+	endif;
+	
+	
+//FREE PAGE TABLE
+
+	if(funcNum == 4) then
+	
+		//We shall not de-allocate library pages as they are common for all processe
+		
+		alias page R3;
+		page=2;
+		
+		while(page<10) do
+			if([PTBR + 2*page] != -1) then
+			
+				multipush(R0,R1,R2,R3);			//Function number for RELEASE_PAGE in Memory Manager Module
+				R1=2;
+				R2=[PTBR + 2*page];
+				call MEMORY_MANAGER;
+				multipop(R0,R1,R2,R3);
+				
+				[PTBR + 2*page] = -1;
+				[PTBR + 2*page + 1] = "0000";
+			endif;
+			
+			page=page+1;
+		endwhile;
+		
+		return;
+	endif;
+				
+	
+
+	
+	
+	
+	
+//EXIT PROCESS FUNCTION
+
+	if(funcNum == 3) then
+		
+		multipush(R1,R2,R3);
+		R1=4;					//Function number for FREE_PAGE_TABLE in Process Manager Module
+		R2=PID;
+		call PROCESS_MANAGER;
+		multipop(R1,R2,R3);
+		
+		
+		multipush(R1,R2,R3);
+		R1=2;					//Function number for FREE_USER_AREA_PAGE in Process Manager Module
+		R2=PID;
+		call PROCESS_MANAGER;
+		multipop(R1,R2,R3);
+		
+		[PROCESS_TABLE + 16*PID + 4]=TERMINATED;
+		
+		return;
+	endif;
+

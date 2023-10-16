@@ -1,4 +1,3 @@
-expl-bin
 ltranslate
 lex.yy.c
 ltranslate.lex.c

@@ -1,0 +1,59 @@
+
+//DEVICE_MANAGER module
+
+alias functionNum R1;
+alias currentPID R2;
+alias word R3;
+
+if(functionNum == 3)then
+    print"entering mod4";
+    multipush (R0,R1,R2,R3);
+    R1=8;
+    R2=[SYSTEM_STATUS_TABLE +1];
+    call MOD_0;
+    multipop(R0,R1,R2,R3);
+    print word;
+
+    multipush(R0,R1,R2,R3);
+    R1=9;
+    R2=[SYSTEM_STATUS_TABLE + 1];
+    call MOD_0; //returns a value -1 or 0 terminal release
+    multipop(R0,R1,R2,R3);
+    return;
+endif; 
+
+if(functionNum==4)then
+    multipush(R1,R2,R3);
+    R1=8;
+    R2=[SYSTEM_STATUS_TABLE + 1];
+    call MOD_0;
+    multipop(R1,R2,R3);
+    read;
+    [PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1 ]*16 + 4]=WAIT_TERMINAL;
+    multipush(R1,R2,R3);
+    call MOD_5;
+    multipop(R1,R2,R3);
+    alias physicalAddStorage R4;
+    physicalAddStorage=[PTBR + (2*R3/512)]*512 + R3 % 512;
+    [physicalAddStorage]=[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 1]* 16 + 8];
+    return;
+endif;  
+
+if(functionNum==2)then
+    multipush(R1,R2,R3);
+    R1=3;
+    R2=[SYSTEM_STATUS_TABLE + 1];
+    call MOD_0;
+    multipop(R1,R2,R3);
+    [DISK_STATUS_TABLE]=1;
+    [DISK_STATUS_TABLE + 4]=R2;
+    load(R3,R4);
+    [PROCESS_TABLE + R2*16 + 4] = WAIT_DISK;
+    multipush(R1,R2,R3,R4,R5);
+    call MOD_5;
+    multipop(R1,R2,R3,R4,R5);
+    return;
+endif;
+
+
+       

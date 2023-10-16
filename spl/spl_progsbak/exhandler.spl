@@ -1,0 +1,50 @@
+//Set mode flag to 1 and switch to kernel stack
+[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1])*16+9]=-1;
+[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1])*16+13]=SP;
+alias userSP R3;
+userSP=R3;
+SP=[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1])*16+11]*512-1;
+backup;
+breakpoint;
+//checking exception cause
+breakpoint;
+if(EC!=0)then
+    R6="Exception other than page fault";
+    print R6;
+    multipush(R1,R2,R3,R4);
+    R1=3;
+    R2=[SYSTEM_STATUS_TABLE+1];
+    call MOD_1;
+    multipop(R1,R2,R3,R4);
+    call MOD_5;
+else
+    if(EPN>3) && (EPN<8)then
+        //exception due to code page
+        multipush(R1,R2,R3,R4,R5,EPN,EIP);
+		R1 = 5;
+		R2 = [DISK_MAP_TABLE + EPN];
+		call MOD_2;
+		[PAGE_TABLE_BASE + [SYSTEM_STATUS_TABLE + 1]*20 + EPN*2] = R0;
+		[PAGE_TABLE_BASE + [SYSTEM_STATUS_TABLE + 1]*20 + EPN*2 + 1] = "1100";
+		multipop(R1,R2,R3,R4,R5,EPN,EIP);
+    else
+        if(EPN==2 || EPN==3)then 
+
+        //exception due to heap
+
+        multipush(R1,R2,R3,R4,R5,EPN,EIP);
+			R1 = 1;
+			call MOD_2;
+			[PAGE_TABLE_BASE + [SYSTEM_STATUS_TABLE + 1]*20 + EPN*2] = R0;
+			[PAGE_TABLE_BASE + [SYSTEM_STATUS_TABLE + 1]*20 + EPN*2 + 1] = "1110";
+			multipop(R1,R2,R3,R4,R5,EPN,EIP);
+		endif;
+    endif;
+endif;
+
+//change stack to user and restore mode bit
+
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;
+restore;
+SP = [PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13];
+ireturn;

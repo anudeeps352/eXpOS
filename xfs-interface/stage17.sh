@@ -11,10 +11,14 @@ load --exec $HOME/myexpos/expl/samples/even_14.xsm
 load --module 7 $HOME/myexpos/spl/spl_progs/bootmodule_17.xsm
 load --int=console $HOME/myexpos/spl/spl_progs/consoleint.xsm
 load --int=timer $HOME/myexpos/spl/spl_progs/timer_stage14.xsm
-load --module 5 $HOME/myexpos/spl/spl_progs/mod_5.xsm
-load --module 2 $HOME/myexpos/spl/spl_progs/mod_2.xsm
-load --module 1 $HOME/myexpos/spl/spl_progs/mod_1.xsm
 load --module 0 $HOME/myexpos/spl/spl_progs/mod_0.xsm
+load --module 1 $HOME/myexpos/spl/spl_progs/mod_1.xsm
+load --module 2 $HOME/myexpos/spl/spl_progs/mod_2.xsm
 load --module 4 $HOME/myexpos/spl/spl_progs/mod_4.xsm
+load --module 5 $HOME/myexpos/spl/spl_progs/mod_5.xsm
+
+
+
+
 
 

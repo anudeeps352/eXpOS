@@ -1,0 +1,4 @@
+R4=[SYSTEM_STATUS_TABLE+1];
+print R4;
+print "TIMER";
+ireturn;

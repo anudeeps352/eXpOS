@@ -1,0 +1,81 @@
+//Resource manager module
+
+alias functionNum R1;
+alias currentPID R2;
+alias counter R3;
+
+//aquire terminal
+
+if(functionNum == 8) then
+	print "enteringres8";
+	while([TERMINAL_STATUS_TABLE + 0] == 1) do
+		[PROCESS_TABLE + currentPID*16 + 4] = WAIT_TERMINAL; //state set to wait terminal
+        multipush(R1,R2,R3);
+		print "called sched";
+        call MOD_5;
+        multipop(R1,R2,R3);
+    endwhile;
+
+    [TERMINAL_STATUS_TABLE + 0 ]=1;  //state of terminal status table
+    [TERMINAL_STATUS_TABLE + 1]=currentPID; //pid of terminal status table
+breakpoint;
+	print "exitiingres8";
+    return;
+
+endif;
+
+//release terminal
+
+if(functionNum == 9)then
+	print "enteringres9";
+	if(currentPID != [TERMINAL_STATUS_TABLE + 1]) then
+		R0 = -1;
+		return;
+	else
+		[TERMINAL_STATUS_TABLE + 0] = 0;
+		alias counter R6;
+		counter = 1;
+			while(counter <= 15) do
+				if([PROCESS_TABLE + (counter*16) + 4] == WAIT_TERMINAL) then
+					[PROCESS_TABLE + (counter*16) + 4] = READY;
+				endif;
+		counter = counter + 1;
+		endwhile;
+		R0 = 0;
+		print "exitingres9";
+		return;
+	endif;
+endif;	
+
+//acquire disk
+if(functionNum==2)then
+	print "enteringres2";
+	while([DISK_STATUS_TABLE + 0] == 1) do
+		[PROCESS_TABLE + currentPID*16 + 4] = WAIT_DISK;
+		multipush(R1,R2,R3);
+        call MOD_5;
+        multipop(R1,R2,R3);
+	endwhile;
+
+	[DISK_STATUS_TABLE + 0 ]=1;  //state of disk status table
+    [DISK_STATUS_TABLE + 5]=currentPID; //pid of disk status table
+breakpoint;
+	print "exitiingres2";
+    return;
+
+endif;	
+
+if(functionNum==3)then
+	print "enteringres3";
+	while(DISK_STATUS_TABLE ==1)do
+		[PROCESS_TABLE+R2*16+4]=WAIT_DISK;
+		multipush(R1,R2);
+		call MOD_5;
+		multipop(R1,R2);
+	endwhile;
+
+	[DISK_STATUS_TABLE]=1;
+	[DISK_STATUS_TABLE+4]=R2;
+	print "exitiingres3";
+	return;
+endif;		
