@@ -6,8 +6,8 @@ load --int=6 $HOME/myexpos/spl/spl_progs/int6.xsm
 load --int=8 $HOME/myexpos/spl/spl_progs/int8.xsm
 load --int=11 $HOME/myexpos/spl/spl_progs/int11.xsm
 load --int=15 $HOME/myexpos/spl/spl_progs/int15.xsm
-load --int=13 $HOME/myexpos/spl/spl_progs/int13.xsm
-load --int=14 $HOME/myexpos/spl/spl_progs/int14.xsm
+load --int=13 $HOME/myexpos/spl/spl_progs/int_13a.xsm
+load --int=14 $HOME/myexpos/spl/spl_progs/int_14a.xsm
 load --library $HOME/myexpos/expl/library.lib
 load --idle $HOME/myexpos/expl/samples/idle.xsm
 load --init $HOME/myexpos/expl/samples/shell.xsm

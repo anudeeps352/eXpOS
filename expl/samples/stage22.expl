@@ -1,3 +1,5 @@
+
+
 type
 Share
 {
@@ -48,7 +50,7 @@ begin
     if(pidtwo == 0) then
       iter = 2;
       while(iter <= 100) do
-       temp = exposcall("SemLock", semid);
+        temp = exposcall("SemLock", semid);
         temp = head.isempty;
 
         if(temp == 1) then
@@ -56,7 +58,7 @@ begin
           head.isempty = 0;
           iter = iter + 2;
         endif;
-
+        
         temp = exposcall("SemUnLock", semid);
       endwhile;
     else
@@ -70,7 +72,7 @@ begin
           head.isempty = 1;
           temp = exposcall("Write", -2, x);
           iter = iter + 1;
-          endif;
+        endif;
 
         temp = exposcall("SemUnLock", semid);
       endwhile;
@@ -80,4 +82,5 @@ begin
   temp = exposcall("Semrelease", semid);
   return 0;
 end
-} 
+}
+
