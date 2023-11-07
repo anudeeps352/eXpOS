@@ -1,0 +1,32 @@
+int main(){
+decl
+	string file1,file2;
+	int a,filedesc1,filedesc2,temp,b; 
+enddecl
+begin
+    write("ENTER FILE1 NAME");
+	temp=exposcall("Read",-1,file1);
+    write("ENTER FILE2 NAME");
+	temp=exposcall("Read",-1,file2);
+	filedesc1=exposcall("Open",file1);
+	filedesc2=exposcall("Open",file2);
+    if(filedesc1==-1)then
+        temp=exposcall("Write",-2,"FILE-1 INV");
+    else    
+        if(filedesc2==-1) then
+		    temp=exposcall("Create",file2,1);
+		    filedesc2=exposcall("Open",file2);
+	    endif;
+	    temp=exposcall("Read",filedesc1,a);
+	    while(temp!=-2) do
+	    	temp=exposcall("Write",filedesc2,a);
+		        if(temp !=0) then
+		        	write("CantWrite");
+		        	break;
+		        endif;
+		    temp=exposcall("Read",filedesc1,a);
+	    endwhile;
+    endif;    
+	return 0;
+end
+}

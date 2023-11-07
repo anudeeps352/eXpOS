@@ -1,0 +1,28 @@
+decl
+	int filedesc;
+enddecl
+int main()
+{
+decl
+    int retval,data,temp,x;
+enddecl    
+
+begin
+    temp=1;
+    filedesc=exposcall("Open","root");
+    x=1;
+    while(x<=60)do 
+        temp=exposcall("Read",filedesc,retval);
+        if(retval==-1)then
+            temp=exposcall("Seek",filedesc,7);
+            x=x+1;
+            continue;
+        endif;
+        temp=exposcall("Write",-2,retval);
+        temp=exposcall("Read",filedesc,retval);
+        temp=exposcall("Seek",filedesc,6);
+        x=x+1;
+    endwhile;
+    return 0;
+end
+}        
