@@ -1,0 +1,69 @@
+//...............EXCEPTION HANDLER................
+//Setting MODE field of Process Table to -1(Exception Handler)
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 9] = -1;
+
+breakpoint;
+
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;  //Storing User Stack pointer to page table entry -- top contains next ip
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * 512 - 1; //i.e., pointing to last of the user area page  -- kernel stack
+
+backup;
+multipush(EIP);
+
+alias UserSP R0;
+UserSP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 13];
+
+//Not Page Fault or (UserSP = PTLR*512 - 1)i.e., no space to store return address
+if((EC !=0) || ((UserSP+1)/512) >= PTLR) then
+    if((UserSP+1)/512 >= PTLR) then     //User Stack Full
+        print "EXCP OTHER !";
+    endif;
+
+    R1 = 3;      //Exiting Process
+    R2 = [SYSTEM_STATUS_TABLE + 1];
+    call MOD_1;
+   
+    call MOD_5;     //Invoking another Process
+endif;
+
+
+multipush(R0);
+//Cause -- Page Fault
+//Code Area Page Fault
+if(EPN > 3) then
+    R1 = 5;
+    R2 = [DISK_MAP_TABLE + ([SYSTEM_STATUS_TABLE + 1]*10) + EPN];   //Block No. of the page to be  loaded -- from Disk Map Table
+    call MOD_2;
+   
+    [PTBR + (2*EPN)] = R0;  //Setting Page Table ; R0 = Page.No returned after Loading from Disk
+    [PTBR + (2*EPN) + 1] = "1100";
+
+//Heap Area Page Fault
+else
+    R1 = 1;     //Heap Page 1
+    call MOD_2;
+    [PTBR + (2*EPN)] = R0;
+    [PTBR + (2*EPN) + 1] = "1110";
+   
+    R1 = 1;     //Heap Page 2
+    call MOD_2;
+    [PTBR + (2*EPN) + 2] = R0;
+    [PTBR + (2*EPN) + 3] = "1110";
+endif;
+multipop(R0);
+
+
+//MODE flag to 0
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 9] = 0;
+
+multipop(EIP);
+restore;
+
+//Changing Back to User Stack
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 13];
+SP = SP + 1;   //Incrementing User Stack to hold EIP
+
+[[PTBR + 2*(SP/512)]*512 + (SP % 512)] = EIP;      //Physical Address of SP+1
+
+//breakpoint;
+ireturn;

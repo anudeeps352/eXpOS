@@ -1,0 +1,210 @@
+
+alias index R5;
+alias usersp R6;
+alias currPID R7;
+alias syscallno R8;
+alias returnaddress R9;
+alias inodeindex R10;
+alias perm R11;
+alias filename R12;
+
+usersp=SP;
+
+//switch to kernel Stack
+[PROCESS_TABLE+16*[SYSTEM_STATUS_TABLE+1]+13]=SP;
+SP=[PROCESS_TABLE+16*[SYSTEM_STATUS_TABLE+1]+11]*512-1;
+
+//return address
+returnaddress=[PTBR + 2*(usersp - 1)/512]*512 + (usersp-1)%512;
+
+//get syscallno
+syscallno=[[PTBR + 2*(usersp - 5)/512]*512 + (usersp-5)%512];
+
+//get filename
+filename = [[PTBR + 2*(usersp-4)/512]*512 + (usersp-4)%512];
+
+//change mode flag to syscallno
+[PROCESS_TABLE+16*[SYSTEM_STATUS_TABLE+1]+9]=syscallno;
+
+index=0;
+
+if(syscallno==1)then // CREATE SYS CALL 
+        while (index<MAX_FILE_NUM) do  
+		    if ([INODE_TABLE + 16*index + 1] == filename) then
+			    [returnaddress] = 0;  //return zero
+			    [PROCESS_TABLE+16*[SYSTEM_STATUS_TABLE+1]+9]= 0;  //change back mode flag
+			    SP = [PROCESS_TABLE+16*[SYSTEM_STATUS_TABLE+1]+13]; //change to user stack
+			    ireturn;
+		    endif;
+		    index = index + 1;
+	    endwhile;
+
+    //if not already present then find a free inode index and create entry
+        index=0;
+        while (index<MAX_FILE_NUM) do 
+		    if ([INODE_TABLE + 16*index + 1] == -1) then   //-1 indicate free entry in inode table
+			    break;
+		    endif;
+		    index = index + 1;
+	    endwhile;
+
+        //if no index is empty, return -1
+	    if (index == MAX_FILE_NUM) then
+		    [returnaddress] = -1;       //return -1 i.e failure
+            [PROCESS_TABLE+16*[SYSTEM_STATUS_TABLE+1]+9]= 0;  //change back mode flag
+			SP = [PROCESS_TABLE+16*[SYSTEM_STATUS_TABLE+1]+13]; //change to user stack
+		    ireturn;
+	    endif;
+
+        //found free entry ,now we modify inode table
+
+        inodeindex=index;   //store index to inode index variable
+        perm = [[PTBR + 2*(usersp-3)/512]*512 + (usersp-3)%512]; //get perm value
+
+        //set inode table entries
+
+        [INODE_TABLE+16*inodeindex + 0] = DATA;	          //file type is data (note)we are only supposed to create dat files
+	    [INODE_TABLE+16*inodeindex + 1] = filename;	      //set file name
+    	[INODE_TABLE+16*inodeindex + 2] = 0;	          //set file size to 0
+	    [INODE_TABLE+16*inodeindex + 3] = [ PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 3];	  //set userid(copy from process table)
+	    [INODE_TABLE+16*inodeindex + 4] = perm;	  //set permission bit given as argument
+	    [INODE_TABLE+16*inodeindex + 8] = -1;	          //set block numbers to -1 (no block present in disk)
+	    [INODE_TABLE+16*inodeindex + 9] = -1;               
+	    [INODE_TABLE+16*inodeindex + 10] = -1;
+	    [INODE_TABLE+16*inodeindex + 11] = -1;	
+
+        //do similiar for root file
+
+        [ROOT_FILE + 8*inodeindex + 0] = filename;	                                      //set filename
+	    [ROOT_FILE + 8*inodeindex + 1] = 0;	                                              //set file size
+	    [ROOT_FILE + 8*inodeindex + 2] = DATA;	                                          //filetype
+	    [ROOT_FILE + 8*inodeindex + 3] = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 3];  //username
+	    [ROOT_FILE + 8*inodeindex + 4] = perm;	                                          //permission
+
+
+    //set file status table entries
+	[FILE_STATUS_TABLE + 4*inodeindex + 0] = -1;	//set locking pid to -1
+	[FILE_STATUS_TABLE + 4*inodeindex + 1] = -1;	//set open instances to -1
+
+    [returnaddress]=0;
+     [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 9]=0;  //change mode flag to 0;
+     SP=[PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 13];  //change Stack pointer to user stack
+     ireturn;
+endif; 
+
+if(syscallno==4)then
+
+    [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 9]=4;
+
+    index=0;
+
+    //get inode index of file
+	while (index < MAX_FILE_NUM) do 
+		if ([INODE_TABLE + 16*index + 1] == filename) then
+			break;
+		endif;
+		index = index + 1;
+	endwhile;
+
+    inodeindex=index;
+
+    //if file does not exist, return 0
+	if (inodeindex == MAX_FILE_NUM) then
+		[returnaddress] = 0;
+		[ PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1]+ 9] = 0;  //change mode bit
+		SP = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1]+ 13]; //change to userstack
+		ireturn;
+	endif;
+
+    //if file is not data file, return -1
+	if ([INODE_TABLE + 16*inodeindex + 0] != DATA) then
+		[returnaddress] = -1;
+		[ PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1]+ 9]= 0;
+		SP = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1]+ 13];
+		ireturn;
+	endif;	
+
+    //if file has exclusive permission
+	if ([INODE_TABLE + 16*inodeindex + 4] == 0) then
+		alias userid R13;
+		userid = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 3];
+		if (userid!=1 && userid!=[INODE_TABLE + 16*inodeindex + 3]) then //if user is not root nor file owner
+			[returnaddress] = -1; //return failure
+			[ PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1]+ 9] = 0;
+			SP = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1]+ 13];
+			ireturn;
+		endif;
+	endif;
+
+    //call acquire inode
+
+    backup;
+	R1 = 4;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R3 = inodeindex;
+	
+	call MOD_0;
+	restore;
+
+    //if the file is open, call release inode and retun -2
+	if ([FILE_STATUS_TABLE + 4*inodeindex + 1] != -1) then
+		backup;
+		R1 = 5; //release inode call
+		R3 = inodeindex;
+		R2 = [SYSTEM_STATUS_TABLE + 1];
+		call MOD_0;
+		restore;
+
+		[returnaddress] = -2;
+		[ PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 9] = 0;
+		SP = [ PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 13];
+
+		ireturn;
+	endif;
+
+    //for each disk block allocated to the file
+	index = 0;
+	while(index < 4) do 
+		if ([INODE_TABLE + 16*inodeindex + 8 + index] != -1) then   //if disk block is allocated to file
+			alias buffid R12;
+			buffid = BUFFER_TABLE + 4*([INODE_TABLE + 16*inodeindex + 8 + index]%4);
+			//if block is loaded in the buffer and dirty bit is set, reset it
+			if ([buffid]==[INODE_TABLE + 16*inodeindex + 8+ index] && [buffid+1]==1) then
+				[buffid+1]=0;
+			endif;
+
+			//call release block in mem manager module
+			backup;
+			R1 = 4;
+			R2 = [INODE_TABLE + 16*inodeindex + 8 + index];
+			R3 = [SYSTEM_STATUS_TABLE + 1];
+			call MOD_2;
+			restore;
+
+        endif;
+
+        [INODE_TABLE + 16*inodeindex + 8 + index] = -1; 
+		index = index + 1;
+	endwhile;
+
+    [INODE_TABLE + 16*inodeindex + 1] = -1;	//invalidate the inode entry
+
+	[ROOT_FILE + 8*inodeindex + 0] = -1;	//invalidate root entry
+
+    //release lock by invoking release inode in resource managaer module
+	backup;
+	R1 = 5;
+	R3 = inodeindex;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	call MOD_0;
+	restore;
+
+    [returnaddress] = 0;
+	[PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 9] = 0;
+	SP = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 13];
+
+	ireturn;
+endif;
+    
+
+

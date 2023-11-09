@@ -1,0 +1,261 @@
+
+//Loading Interrupts
+alias i R1;
+i = 0;
+while ( i <= 35)do
+    loadi(2+i,15+i);
+    i=i+1;
+endwhile;
+
+//Loading module 5 from disk to memory
+loadi(50,63);
+loadi(51,64);
+
+//Loading module 0
+loadi(40,53);
+loadi(41,54);
+
+//Loading module 4
+loadi(48,61);
+loadi(49,62);
+
+//Loading module 1
+loadi(42,55);
+loadi(43,56);
+
+//Loading module 2
+loadi(44,57);
+loadi(45,58);
+
+//loading module 3
+loadi(46,59);	
+loadi(47,60);
+
+//loading module 6 pager module
+loadi(52,65);
+loadi(53,66);
+
+//Loading Inode table
+loadi(59,3);
+loadi(60,4);
+
+//Loading Disk Free List
+loadi(61,2);
+
+
+//loading root file
+loadi(62,5);
+
+//Library
+loadi(63,13);
+loadi(64,14);
+
+//Init Code 
+loadi(65, 7);
+
+//Shell Code 
+loadi(67, 9);
+loadi(68, 10);
+
+//Initialising status in terminal status table as 0
+[TERMINAL_STATUS_TABLE]=0;
+
+
+//---------------------------------- SHELL PROCESS ---------------------------//
+
+PTBR = PAGE_TABLE_BASE+40;
+PTLR = 10;
+
+//Library
+[PTBR+0]=63;
+[PTBR+1]="0100";
+[PTBR+2]=64;
+[PTBR+3]="0100";
+
+//Heap
+[PTBR+4]=-1;
+[PTBR+5]="0000";
+[PTBR+6]=-1;
+[PTBR+7]="0000";
+
+//Code
+[PTBR+8]=67;
+[PTBR+9]="0100";
+[PTBR+10]=68; //66
+[PTBR+11]="0100";
+[PTBR+12]=-1;
+[PTBR+13]="0000";
+[PTBR+14]=-1;
+[PTBR+15]="0000";
+
+//Stack
+[PTBR+16]=78;
+[PTBR+17]="0110";
+[PTBR+18]=79;
+[PTBR+19]="0110";
+
+
+i=32;
+
+[PROCESS_TABLE+i+11]=80;
+
+[PROCESS_TABLE+i+1]=2;
+[PROCESS_TABLE+i+2]=1;
+[PROCESS_TABLE+i+4]=TERMINATED;
+[PROCESS_TABLE+i+13]=8*512;
+[PROCESS_TABLE+i+12]=0;
+[PROCESS_TABLE+i+14]=PAGE_TABLE_BASE+40;
+[PROCESS_TABLE+i+15]=10;
+[PROCESS_TABLE+i+3]=1; //setting userid to root
+
+alias disk_map R11;
+disk_map= DISK_MAP_TABLE + 10*2;
+
+
+i=0;
+while(i<=9) do
+	[disk_map+i]=-1;
+	i=i+1;
+endwhile;
+[disk_map+4]=67;
+[disk_map+5]=68;
+
+[78*512]=[67*512+1];
+
+
+
+//Setting up Page Table for init program
+PTBR=PAGE_TABLE_BASE+20;
+PTLR=10;
+
+
+//Library
+[PTBR+0]=63;
+[PTBR+1]="0100";
+[PTBR+2]=64;
+[PTBR+3]="0100";
+
+//Heap
+[PTBR+4]=-1;
+[PTBR+5]="0000";
+[PTBR+6]=-1;
+[PTBR+7]="0000";
+
+//Code
+[PTBR+8]=65;
+[PTBR+9]="0100";
+[PTBR+10]=-1;  //onepage 
+[PTBR+11]="0000";
+[PTBR+12]=-1;
+[PTBR+13]="0000";
+[PTBR+14]=-1;
+[PTBR+15]="0000";
+
+//Stack
+[PTBR+16]=66; //76
+[PTBR+17]="0110";
+[PTBR+18]=77;
+[PTBR+19]="0110";
+
+
+//Process table for init process
+[PROCESS_TABLE + 16]=0;
+[PROCESS_TABLE + 16 + 11]=77;                  //User area page for init process
+[PROCESS_TABLE + 16 + 4]=CREATED;              //State for init process
+[PROCESS_TABLE + 16 + 1]=1;                    //PID for init process
+[PROCESS_TABLE + 16 +13]=8*512;	               //UPTR for init process
+[PROCESS_TABLE + 16 +12]=0;                    //KPTR for init process
+[PROCESS_TABLE + 16 +14]=PAGE_TABLE_BASE+20;   //PTBR for init process
+[PROCESS_TABLE + 16 +15]=10;                   //PTLR for init process
+[PROCESS_TABLE + 16 + 3]=1;                    //setting userid to root
+
+[66*512]=[65*512 + 1];
+
+
+
+//Setting up Per-Process Table in User Area page of init process and invalidating all entries by default
+alias j R3;
+j=496;
+while(j<512) do
+	[77*512 + j]=-1;
+	j = j+2;
+endwhile;
+
+
+
+//Initializing file status table
+i=0;
+while(i<60) do
+	[FILE_STATUS_TABLE+i*4+0]=-1;
+	[FILE_STATUS_TABLE+i*4+1]=-1;
+	i=i+1;
+endwhile;
+
+//Initializing buffer table
+i=0;
+while(i<4) do
+	[BUFFER_TABLE+i*4+0]=-1;
+	[BUFFER_TABLE+i*4+1]=0;
+	[BUFFER_TABLE+i*4+2]=-1;
+	i=i+1;
+endwhile;
+
+//Initialising Semaphore table
+
+i=0;
+while(i<32) do
+	[SEMAPHORE_TABLE+i*4+0]=-1;
+	[SEMAPHORE_TABLE+i*4+1]=0;
+	i=i+1;
+endwhile;
+
+i=3;
+while(i<16) do
+	[PROCESS_TABLE + (i*16) +4] = TERMINATED;
+	i=i+1;
+endwhile;
+
+// OPEN FILE TABLE entries
+i = 0;
+
+while(i < MAX_OPENFILE_NUM) do
+    [OPEN_FILE_TABLE + 4*i] = -1;         
+    [OPEN_FILE_TABLE + 4*i + 1] = 0; 
+    i = i + 1;
+endwhile;
+
+alias count R2;
+count=0;
+while(count!=128)do
+    if (count < 82) then
+        [MEMORY_FREE_LIST+count]=1;
+    else 
+        [MEMORY_FREE_LIST+count]=0;
+    endif;
+    count=count+1;
+endwhile;
+
+
+count = 0;
+while(count<16)do                               //Setting Tick to zero
+    [PROCESS_TABLE + 16*count] = 0;
+    count = count + 1;
+endwhile;
+
+
+[SYSTEM_STATUS_TABLE ] = 0;
+[SYSTEM_STATUS_TABLE + 2]=45;			//MEM_FREE_COUNT - There are 45 free pages in memory
+[SYSTEM_STATUS_TABLE + 3]=0;			//WAIT_MEM_COUNT - Initially, no process is waiting for memory pages to be freed
+[SYSTEM_STATUS_TABLE + 4] = 0;          //swap count
+[SYSTEM_STATUS_TABLE + 5] = 0;          //paging status
+
+[DISK_STATUS_TABLE] = 0;			//Setting status field as 0 to show disk is free
+
+return;
+
+
+
+
+
+
+

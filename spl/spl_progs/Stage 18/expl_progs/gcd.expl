@@ -1,0 +1,41 @@
+decl
+	int a,b,c,temp,flag;
+enddecl
+
+int main()
+{
+begin
+	temp=exposcall("Read",-1,a);
+	temp=exposcall("Read",-1,b);
+	flag=0;
+	
+	
+	c=1;
+	
+	if(b>a) then
+		c=a;
+		a=b;
+		b=c;
+	endif;
+	
+	
+	
+	if (b==0) then
+		temp=exposcall("Write",-2,"ERROR");
+		flag=1;
+	endif;
+	
+	if(flag==0) then	
+		while (c!=0) do
+			c=a%b;
+			a=b;
+			b=c;
+		endwhile;
+		temp=exposcall("Write",-2,"GCD :");
+		temp=exposcall("Write",-2,a);
+	endif;
+	
+	
+	return 0;
+end
+}

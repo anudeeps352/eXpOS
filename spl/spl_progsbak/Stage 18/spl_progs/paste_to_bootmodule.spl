@@ -1,0 +1,103 @@
+//Setting up Page Table for evens.xsm program
+PTBR=PAGE_TABLE_BASE+40;
+PTLR=10;
+
+
+//Library
+[PTBR+0]=63;
+[PTBR+1]="0100";
+[PTBR+2]=64;
+[PTBR+3]="0100";
+
+//Heap
+[PTBR+4]=-1;
+[PTBR+5]="0000";
+[PTBR+6]=-1;
+[PTBR+7]="0000";
+
+//Code
+[PTBR+8]=83;
+[PTBR+9]="0100";
+[PTBR+10]=-1;
+[PTBR+11]="0000";
+[PTBR+12]=-1;
+[PTBR+13]="0000";
+[PTBR+14]=-1;
+[PTBR+15]="0000";
+
+//Stack
+[PTBR+16]=85;
+[PTBR+17]="0110";
+[PTBR+18]=-1;
+[PTBR+19]="0000";
+
+//Setting up Page Table for evens.xsm program
+PTBR=PAGE_TABLE_BASE+60;
+PTLR=10;
+
+
+//Library
+[PTBR+0]=63;
+[PTBR+1]="0100";
+[PTBR+2]=64;
+[PTBR+3]="0100";
+
+//Heap
+[PTBR+4]=-1;
+[PTBR+5]="0000";
+[PTBR+6]=-1;
+[PTBR+7]="0000";
+
+//Code
+[PTBR+8]=88;
+[PTBR+9]="0100";
+[PTBR+10]=-1;
+[PTBR+11]="0000";
+[PTBR+12]=-1;
+[PTBR+13]="0000";
+[PTBR+14]=-1;
+[PTBR+15]="0000";
+
+//Stack
+[PTBR+16]=89;
+[PTBR+17]="0110";
+[PTBR+18]=-1;
+[PTBR+19]="0000";
+
+
+
+
+
+
+
+//paste 2
+
+
+
+
+
+//Process table for init process
+[PROCESS_TABLE + 2*16] = 0;
+[PROCESS_TABLE + 2*16 + 11]=86;                  //User area page for init process
+[PROCESS_TABLE + 2*16 + 4]=CREATED;              //State for init process
+[PROCESS_TABLE + 2*16 + 1]=2;                    //PID for init process
+[PROCESS_TABLE + 2*16 +13]=8*512;	       //UPTR for init process
+[PROCESS_TABLE + 2*16 +12]=0;                    //KPTR for init process
+[PROCESS_TABLE + 2*16 +14]=PAGE_TABLE_BASE+40;   //PTBR for init process
+[PROCESS_TABLE + 2*16 +15]=10;                   //PTLR for init process
+
+[85*512]=[83*512 + 1];
+
+
+//Process table for init process
+[PROCESS_TABLE + 3*16] = 0;
+[PROCESS_TABLE + 3*16 + 11]=90;                  //User area page for init process
+[PROCESS_TABLE + 3*16 + 4]=CREATED;              //State for init process
+[PROCESS_TABLE + 3*16 + 1]=3;                    //PID for init process
+[PROCESS_TABLE + 3*16 +13]=8*512;	       //UPTR for init process
+[PROCESS_TABLE + 3*16 +12]=0;                    //KPTR for init process
+[PROCESS_TABLE + 3*16 +14]=PAGE_TABLE_BASE+60;   //PTBR for init process
+[PROCESS_TABLE + 3*16 +15]=10;                   //PTLR for init process
+
+[89*512]=[88*512 + 1];
+

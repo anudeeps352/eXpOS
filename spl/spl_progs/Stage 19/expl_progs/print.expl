@@ -1,0 +1,13 @@
+decl
+	str s;
+	int temp,t;
+enddecl
+
+int main()
+{
+begin
+	s="apple";
+	t=exposcall("Write",-2,s);
+	return 0;
+end
+}

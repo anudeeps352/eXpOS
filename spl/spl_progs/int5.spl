@@ -1,0 +1,194 @@
+
+// Open ,Close and Seek syscall
+
+alias process_table R1;
+alias userSP R2;
+
+process_table = PROCESS_TABLE+[SYSTEM_STATUS_TABLE+1]*16;
+[process_table + 13] = SP;           
+userSP = SP;
+
+SP = [process_table + 11]*512 - 1;      
+
+alias syscall R3;
+syscall = [[PTBR + 2 * ((userSP - 5) / 512)] * 512 + (userSP - 5) % 512];
+
+alias returnaddress R4;
+returnaddress = [PTBR + 2 * ((userSP - 1) / 512)] * 512 + (userSP - 1) % 512;
+
+if( syscall == 2 ) then   //open syscall
+	[process_table + 9] = 2;
+	
+	alias filename R5;
+	filename = [[PTBR + 2 * ((userSP - 4) / 512)] * 512 + (userSP - 4) % 512];
+	
+	alias resource_table R6;
+	resource_table = [process_table+11]*512 + RESOURCE_TABLE_OFFSET;
+	
+	alias i R7;
+	i = 0;
+	
+	while( i < 8 ) do
+		if( [resource_table + 2*i] == -1 ) then		//check fr free entry
+			break;
+		endif;
+		i = i + 1; 
+	endwhile;
+	
+	if( i == 8 ) then								//no free entries
+		[returnaddress] = -3;
+		SP = userSP;
+		[process_table + 9] = 0;
+		ireturn;
+	endif;
+	
+	// call open function, R0 returns open file entry
+	multipush(R1,R2,R3,R4,R5,R6,R7,R8);
+	R1 = OPEN;										
+	R2 = filename;
+	call FILE_MANAGER;
+	multipop(R1,R2,R3,R4,R5,R6,R7,R8);
+	
+	// file type is not data or root
+	if( R0 == -1 ) then
+		[returnaddress] = -1;
+		SP = userSP;
+		[process_table + 9] = 0;
+		ireturn;
+	endif;
+	
+	// system reached limit to open files
+	if( R0 == -2 ) then
+		[returnaddress] = -2;
+		SP = userSP;
+		[process_table + 9] = 0;
+		ireturn;
+	endif;
+	
+	[resource_table + 2*i] = FILE;
+	[resource_table + 2*i + 1] = R0;
+	
+	[returnaddress] = i;
+	SP = userSP;
+	[process_table + 9] = 0;
+	ireturn;
+endif;
+
+if( syscall == 3 ) then  //close syscall
+	[process_table + 9] = 3;
+	
+	alias filedesc R5;
+	filedesc = [[PTBR + 2 * ((userSP - 4) / 512)] * 512 + (userSP - 4) % 512];
+	
+	alias resource_table R6;
+	resource_table = [process_table+11]*512 + RESOURCE_TABLE_OFFSET;
+	
+	if( filedesc < 0 || filedesc > 7 || [resource_table + 2*filedesc] != FILE ) then
+		[returnaddress] = -1;
+		SP = userSP;
+		[process_table + 9] = 0;
+		ireturn;
+	endif; 
+	
+	alias open_file_entry R7;
+	open_file_entry = [resource_table + 2*filedesc + 1];
+	
+	backup;
+	R1 = CLOSE;
+	R2 = open_file_entry;
+	call FILE_MANAGER;
+	restore;
+	
+	[resource_table + 2*filedesc] = -1;
+	[resource_table + 2*filedesc + 1] = -1;
+	
+	[returnaddress] = 0;
+	SP = userSP;
+	[process_table + 9] = 0;
+	ireturn;
+endif;
+
+if(syscall==6)then //seekcall
+	[process_table + 9] = 6;
+
+	alias filedesc R5;
+	filedesc = [[PTBR + 2 * ((userSP - 4) / 512)] * 512 + (userSP - 4) % 512];
+	
+	alias resource_table R6;
+	R6 = [process_table+11]*512 + RESOURCE_TABLE_OFFSET;
+	
+	if( filedesc < 0 || filedesc > 7 || [resource_table + 2*filedesc] != FILE ) then
+		[returnaddress] = -1;
+		SP = userSP;
+		[process_table + 9] = 0;
+		ireturn;
+	endif; 
+
+	alias open_file_entry R7;
+	open_file_entry = [resource_table + 2*filedesc + 1];
+
+	alias inodeindex R8;
+	inodeindex = [OPEN_FILE_TABLE + 4*open_file_entry];
+
+	multipush(R1, R2, R3, R4, R5, R6, R7, R8);
+	R1 = ACQUIRE_INODE;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R3 = inodeindex;
+	call RESOURCE_MANAGER;
+	multipop(R1, R2, R3, R4, R5, R6, R7, R8);
+
+	if(R0 == -1) then
+		backup;
+		R1 = ACQUIRE_INODE;
+		R2 = [SYSTEM_STATUS_TABLE + 1];
+		R3 = inodeindex;
+		call RESOURCE_MANAGER;
+		restore;
+		[returnaddress] = -1;
+		SP = userSP;
+		[process_table + 9] = 0;
+		ireturn;
+	endif;
+
+	alias lseek R9;
+	lseek = [OPEN_FILE_TABLE + 4*open_file_entry + 2];
+
+	alias offset R10;
+	offset = [[PTBR + 2*((userSP-3)/512)]*512 + (userSP-3)%512];
+
+	if(offset + lseek < 0) then
+		backup;
+		R1 = RELEASE_INODE;
+        R2 = [SYSTEM_STATUS_TABLE+1];
+        R3 = inodeindex;
+        call RESOURCE_MANAGER;
+        restore;
+
+        [returnaddress] = -2;
+        SP = userSP;
+        [process_table + 9] = 0;
+        ireturn;
+    endif;
+
+	if(offset == 0) then
+        [OPEN_FILE_TABLE + 4*open_file_entry + 2] = 0;
+	else
+        if((lseek + offset) > [INODE_TABLE + 16*inodeindex + 2]) then
+            [OPEN_FILE_TABLE + 4*open_file_entry + 2] = [INODE_TABLE + 16*inodeindex + 2];
+        else
+            [OPEN_FILE_TABLE + 4*open_file_entry + 2] = lseek + offset;
+        endif;
+    endif;
+
+	backup;
+    R1 = RELEASE_INODE;
+    R2 = [SYSTEM_STATUS_TABLE+1];
+    R3 = inodeindex;
+    call RESOURCE_MANAGER;
+    restore;
+
+    [returnaddress] = 0;
+    SP = userSP;
+    [process_table + 9] = 0;
+    ireturn;
+endif;

@@ -1,0 +1,148 @@
+//semaphore lock and semaphore unlock
+
+alias userSP R0;
+alias physicalpageNum R1;
+alias offset R2;
+alias address R3;
+alias syscallno R4;
+alias userAreaPageno R5;
+alias i R6;
+alias free_entry R7;
+alias returnaddress R8;
+alias sem_desc R9;
+alias semtable_index R10;
+
+userSP=SP;
+
+//switch to kernel stack
+[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP; //Saving sp value in UPTR field
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * 512 - 1; //switch to kernel stack
+
+//access syscall number from user stack(syscall before arg1)
+physicalpageNum=[PTBR+2*((userSP-5)/512)];
+offset=(userSP-5)%512;
+address=physicalpageNum*512+offset;
+syscallno=[address];
+
+if(syscallno==19)then  //locksem
+
+    //set mode flag to 19
+    [PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 19;
+
+    physicalpageNum = [PTBR + 2 * ((userSP - 4)/ 512)];
+	offset = (userSP - 4) % 512;
+	address = (physicalpageNum * 512) + offset;
+
+	sem_desc = [address];
+
+    userAreaPageno=[PROCESS_TABLE+16*[SYSTEM_STATUS_TABLE+1]+11];
+
+    if(sem_desc<0 || sem_desc>=8 || 
+		[userAreaPageno*512 + (sem_desc * 2 + 496)]!=1) then
+
+		//Setting return value as -1 (Failure)
+		
+		returnaddress = ([PTBR + 2 * ((userSP - 1) / 512)] * 512) + ((userSP - 1) % 512);
+		[returnaddress] = -1;
+
+		//reset mode flag (0 indicates process is in user mode).
+		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;
+		
+		//changing back to user stack
+		SP = userSP;
+
+		ireturn;
+    endif;
+
+    semtable_index=[userAreaPageno*512+(sem_desc*2+496)+1];
+    while([SEMAPHORE_TABLE+4*semtable_index+0]!=-1 && [SEMAPHORE_TABLE+4*semtable_index+0]!=[SYSTEM_STATUS_TABLE+1])do
+        [PROCESS_TABLE+16*[SYSTEM_STATUS_TABLE+1]+4]=WAIT_SEMAPHORE;
+		[PROCESS_TABLE+16*[SYSTEM_STATUS_TABLE+1]+5]=semtable_index; 
+        backup;
+        call MOD_5;
+        restore;
+    endwhile;
+    [SEMAPHORE_TABLE + 4*semtable_index + 0] = [SYSTEM_STATUS_TABLE+1]; 
+    print "locked";
+    //Changing back to user stack and return to user mode
+	SP = [PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13];
+
+	//restoring mode flag
+	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;  
+
+    //Setting return value as 0 (Success)
+		
+	returnaddress = ([PTBR + 2 * ((userSP - 1) / 512)] * 512) + ((userSP - 1) % 512);
+	[returnaddress] = 0;
+
+	ireturn;  
+endif;
+
+if(syscallno==20) then //SEM_UNLOCK system call
+
+    //Setting mode flag to system call number
+	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 20;
+
+    physicalpageNum = [PTBR + 2 * ((userSP - 4)/ 512)];
+	offset = (userSP - 4) % 512;
+	address = (physicalpageNum * 512) + offset;
+
+	sem_desc = [address];
+
+    userAreaPageno=[PROCESS_TABLE+16*[SYSTEM_STATUS_TABLE+1]+11];
+
+    if(sem_desc<0 || sem_desc>=8 || [userAreaPageno*512+(sem_desc*2+496)]!=-1)then
+        //set return value as -1
+
+        returnaddress = ([PTBR + 2 * ((userSP - 1) / 512)] * 512) + ((userSP - 1) % 512);
+		[returnaddress] = -1;
+
+        //reset mode flag (0 indicates process is in user mode).
+		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;
+		
+		//changing back to user stack
+		SP = userSP;
+
+		ireturn;
+    endif;
+
+    semtable_index = [userAreaPageno*512 + (sem_desc * 2 + 496) +1];   
+
+    if(SEMAPHORE_TABLE+4*semtable_index+0!=-1)then
+        if([SEMAPHORE_TABLE+4*semtable_index+0]!=[SYSTEM_STATUS_TABLE+1])then
+            //set return value as -2 i.e failure
+            returnaddress = ([PTBR + 2 * ((userSP - 1) / 512)] * 512) + ((userSP - 1) % 512);
+			[returnaddress] = -2; 
+
+            //reset mode flag (0 indicates process is in user mode).
+			[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;
+			
+			//changing back to user stack
+			SP = userSP;
+            ireturn;
+        endif;
+        [SEMAPHORE_TABLE+4*semtable_index+0]=-1;
+
+        i=0;
+        while(i<=15)do
+            if([PROCESS_TABLE+i*16+4]==WAIT_SEMAPHORE && [PROCESS_TABLE+i*16+5]==semtable_index)then
+                [PROCESS_TABLE+16*i+4]=READY;
+                print "unlocked";
+            endif;
+            i=i+1;
+        endwhile;
+    endif;
+
+    //Changing back to user stack and return to user mode
+	SP = [PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13];
+
+	//restoring mode flag
+	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;  
+
+    //set return as 0
+
+    returnaddress = ([PTBR + 2 * ((userSP - 1) / 512)] * 512) + ((userSP - 1) % 512);
+	[returnaddress] = 0;
+
+	ireturn;      
+endif;    

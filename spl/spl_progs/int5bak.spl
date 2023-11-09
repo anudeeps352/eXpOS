@@ -1,0 +1,107 @@
+alias userSP R2;
+alias syscallno R3;
+alias returnaddress R4;
+alias filename R5;
+alias processtable R6;
+alias resourcetable R7;
+
+userSP=SP; //assign to userrSP
+[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+13]=SP;  //switching stacks to kernel
+SP = [PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16) + 11]*512 - 1;
+
+syscallno = [[PTBR + 2 * ((userSP - 5) / 512)] * 512 + (userSP - 5) % 512]; //getsyscall value
+
+returnaddress=[[PTBR+2*((userSP-1)/512)]*512+(userSP-1)%512];
+
+processtable = PROCESS_TABLE+[SYSTEM_STATUS_TABLE+1]*16;
+
+if(syscallno==2)then
+   [PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+9]=2;  //set mode to open syscall number
+    filename = [[PTBR + 2 * ((userSP - 4) / 512)] * 512 + (userSP - 4) % 512];
+
+    resourcetable = [processtable+11]*512 + RESOURCE_TABLE_OFFSET; //find current process table then get user area page then get per process table
+
+    alias i R8;
+    i=0;
+
+    while(i<8)do //each entrie of size 2 word,8 entries total
+        if(resourcetable+2*i==-1)then //free entry?
+            break;
+        endif;
+        i=i+1;
+    endwhile;
+
+    if(i==8)then    //no free entry
+        [returnaddress]=-3;
+        SP=userSP;
+        [PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+9]=0;
+        ireturn;
+    endif;
+
+    //calling open function from file manager module ,R0 return open file entry
+    multipush(R1,R2,R3,R4,R5,R6,R7,R8);
+	R1 = 3;
+	R2 = filename;
+	call FILE_MANAGER; //module 3
+	multipop(R1,R2,R3,R4,R5,R6,R7,R8);
+
+    // file type is not data or root
+	if( R0 == -1 ) then
+		[returnaddress] = -1;
+		SP = userSP;
+		[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+9]=0;
+		ireturn;
+	endif;
+
+    //unable to open then error
+      if( R0 == -2 ) then
+		[returnaddress] = -2;
+		SP = userSP;
+		[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+9]=0;
+		ireturn;
+	endif;  
+
+
+	[resourcetable + 2*i] = FILE;    //processtable ==PROCESS_TABLE+[SYSTEM_STATUS_TABLE+1]*16
+	[resourcetable + 2*i + 1] = R0;  //setting up free entry of process table
+
+    [returnaddress] = i;
+	SP = userSP;
+	[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+9]=0;
+	ireturn;
+endif;
+
+if(syscallno==3)then //close sys call
+    [PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+9]=3; //set mode to 3
+
+    alias filedesc R9;
+    filedesc=[[PTBR+2*((userSP-4)/512)]*512+(userSP-4)%512];
+    resourcetable = [processtable+11]*512 + RESOURCE_TABLE_OFFSET; //find current process table then get user area page then get per process table
+    
+    if(filedesc<0 ||filedesc>7 || [resourcetable + 2*filedesc] != FILE)then //if entry above/below limit or not a file,error
+        [returnaddress] = -1;
+		SP = userSP;
+		[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+9]=0;
+		ireturn;
+    endif;
+
+    alias open_file_entry R10;
+	open_file_entry = [resourcetable + 2*filedesc + 1];  
+
+    backup;     //call func3 in file manager
+	R1 = CLOSE;
+	R2 = open_file_entry;
+	call FILE_MANAGER;
+	restore;  
+
+    [resourcetable + 2*filedesc] = -1;  //set up per process resourcetable back to free
+	[resourcetable + 2*filedesc + 1] = -1;
+
+    [returnaddress] = 0;
+	SP = userSP;
+	[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+9]=0;
+	ireturn;
+endif;    
+
+
+

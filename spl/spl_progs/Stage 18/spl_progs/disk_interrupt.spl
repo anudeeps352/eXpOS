@@ -1,0 +1,36 @@
+//Storing SP value in UPTR field of Process Table
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] *16) + 13]=SP;
+
+
+//Setting SP to UArea Page Number * 512 - 1;
+	SP=[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] *16) + 11] * 512 - 1;
+
+//backing up user context
+	backup;
+	
+	
+//Setting status of Disk Status Table to 0 to show disk is free
+	[DISK_STATUS_TABLE] = 0;
+	
+
+	alias counter R0;
+	R0=0;
+	
+	while(counter<16) do
+		
+		if( [PROCESS_TABLE + counter*16 + 4] == WAIT_DISK ) then
+			[PROCESS_TABLE + counter*16 + 4] = READY;
+		endif;
+		
+		counter = counter + 1;
+		
+	endwhile;
+	
+
+
+//Restoring user context
+restore;
+
+//Switching back to user mode
+SP=[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE +1] *16) + 13];         //USER SP 
+ireturn;

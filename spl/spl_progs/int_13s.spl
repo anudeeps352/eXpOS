@@ -1,0 +1,127 @@
+//_______________________________INTERRUPT 13__________________________________
+//_______________________SEMGET, SEMRELEASE syscalls___________________________
+alias userSP R0;
+alias currentPID R1;
+alias current_process_table R2;
+alias current_User_Page R3;
+
+alias syscallNum R5;
+alias i R6;
+alias sem_id R7;	//as returned by ACCQUIRE_SEM (the index for semaphore in the SEMAPHORE_TAB)
+alias sem_desc_ind R8;	//index of SEMAPHORE in the PER_PROCESS_RESOURCE_TAB
+
+currentPID = [SYSTEM_STATUS_TABLE + 1];
+current_process_table = PROCESS_TABLE + 16*currentPID;
+current_User_Page = [current_process_table + 11];
+
+userSP = SP;
+[current_process_table + 13] = SP;
+SP = [current_process_table + 11]*512 - 1;
+
+syscallNum = [[PTBR + 2*((userSP-5)/512)]*512 + (userSP-5)%512];
+
+
+//-------------------------------------SEMGET system call----------------------------------------
+if(syscallNum == 17) then
+	[current_process_table + 9] = 17;   //MODE = Syscall Number
+
+	i = RESOURCE_TABLE_OFFSET;
+	while(i < 512) do
+		if([current_User_Page*512 + i] == -1) then
+			break;
+		endif;
+	i = i + 2;
+	endwhile;
+
+	if(i == 512) then	//No entry in PER_PROCESS_RESOURCE_TAB is free
+		[[PTBR + 2*((userSP-1)/512)]*512 + (userSP-1)%512] = -1;    //return to user mode with -1 ret value indicating failure
+
+		[current_process_table + 9] = 0;
+        SP = [current_process_table + 13];
+        ireturn;
+	
+	else	
+	//Free entry is found in PER_PROCESS_RESOURCE_TABLE
+        sem_desc_ind = (i - RESOURCE_TABLE_OFFSET)/2;
+
+		//--calling ACCQUIRE_SEM--
+		multipush (R0, R1, R2, R3, R5, R6, R8);
+		R2 = currentPID;
+		R1 = ACQUIRE_SEMAPHORE;
+		call RESOURCE_MANAGER;
+		
+		sem_id = R0;	//SEM_ID is in R7 so its not pushed or popped
+		//backup;
+		//print R7;
+		//restore;
+		multipop (R0, R1, R2, R3, R5, R6, R8);
+
+
+
+	    if(sem_id == -1) then	//No new SEMAPHORE available
+			    [[PTBR + 2*((userSP-1)/512)]*512 + (userSP-1)%512] = -2;    //Failure -> Returning to user mode -> Return Value = -2
+
+			    [current_process_table + 9] = 0;
+			    SP = [current_process_table + 13];
+			    ireturn;
+		
+		else	
+		//New SEM available
+			
+			[current_User_Page*512 + i] = SEMAPHORE;	//setting resource identifier for SEMAPHORE in free entry found in PER_PROC_RES_TAB
+			[current_User_Page*512 + i + 1] = sem_id;
+
+			[[PTBR + 2*((userSP-1)/512)]*512 + (userSP-1)%512] = sem_desc_ind;
+
+			[current_process_table + 9] = 0;
+            SP = [current_process_table + 13];
+			ireturn;
+		endif;
+
+	endif;
+
+endif;
+//--------------------------------Done SEMGET------------------------------------------
+
+
+//------------------------------SEMRELEASE syscall--------------------------------------
+if(syscallNum == 18) then
+	[current_process_table + 9] = 18;  //MODE = Syscall Number
+	sem_desc_ind = [[PTBR + 2*((userSP-4)/512)]*512 + (userSP-4)%512];
+
+	if((sem_desc_ind < 0) || (sem_desc_ind > 7) || ([current_User_Page*512 + (2*sem_desc_ind) + 496] != SEMAPHORE)) then
+	//If sem_desc_indis not valid
+		[[PTBR + 2*((userSP-1)/512)]*512 + (userSP-1)%512] = -1;    //Failure -> Ret Val = -1
+		
+		[current_process_table + 9] = 0;
+		SP = [current_process_table + 13];
+		ireturn;
+		
+	else
+	//Valid sem_desc_ind given
+		sem_id = [current_User_Page*512 + (2*sem_desc_ind) + 496 + 1];
+
+		backup;	//instead of MULTIPUSH
+		R2 = currentPID;
+		R1 = RELEASE_SEMAPHORE;
+		R3 = sem_id;
+		call RESOURCE_MANAGER;	//calling RELEASE_SEMAPHORE of RESOURCE_MANAGER
+		restore;	//instead of MULTIPOP
+
+		[current_User_Page*512 + (2*sem_desc_ind) + RESOURCE_TABLE_OFFSET] = -1;
+		[current_User_Page*512 + (2*sem_desc_ind) + RESOURCE_TABLE_OFFSET + 1] = -1;
+
+		[[PTBR + 2*((userSP-1)/512)]*512 + (userSP-1)%512] = 0;   //Success -> Ret Val = 0
+		[current_process_table + 9] = 0;
+		SP = [current_process_table + 13];
+		ireturn;
+	endif;
+endif;
+
+//-------------------------------------Done SEMRELEASE----------------------------------------
+
+//If syscallNum is none
+[current_process_table + 9] = -1;
+SP = [current_process_table + 13];
+ireturn;
+

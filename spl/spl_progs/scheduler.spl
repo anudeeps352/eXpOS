@@ -1,0 +1,56 @@
+//...................SCHEDULER (MOD_5).................................
+
+alias currentPID R0;
+currentPID = [SYSTEM_STATUS_TABLE + 1]; //PID of Current Process
+
+multipush(BP);    //Pushing BP on top of Kernel Stack
+
+alias process_table_entry R1;
+process_table_entry = PROCESS_TABLE + currentPID * 16;  //Process Table Entry of Current Process
+
+//Saving Values in Process Table Entry
+[process_table_entry + 12] = SP % 512;  //KPTR offset
+[process_table_entry + 14] = PTBR;
+[process_table_entry + 15] = PTLR;
+
+alias tmp_id R5;
+tmp_id = (currentPID + 1) % 16;
+
+alias tmp_status R6;
+
+while(tmp_id != currentPID) do
+    tmp_status = [PROCESS_TABLE + (tmp_id * 16) + 4];
+    if(tmp_status==READY || tmp_status==CREATED) then
+        break;
+    endif;
+    tmp_id = (tmp_id+1) % 16;
+endwhile;
+
+if(tmp_id == currentPID) then
+    tmp_id = 0;
+endif;
+
+process_table_entry = PROCESS_TABLE + (tmp_id * 16);
+SP = [process_table_entry + 11]*512 + [process_table_entry + 12];
+//Going to top of kernel stack -- UserAreaPageNo.*512 + KPTR
+
+PTBR = [process_table_entry + 14];  //Setting PTBR and PTLR to current process values
+PTLR = [process_table_entry + 15];
+
+[SYSTEM_STATUS_TABLE + 1] = tmp_id; //Setting system status table to current process
+
+if([process_table_entry + 4] == CREATED) then
+    BP = [[process_table_entry + 11] * 512];    //BP value stored at starting word of User Area Page by Fork Syscall
+    
+    SP = [process_table_entry + 13];
+    [process_table_entry + 4] = RUNNING;
+    [process_table_entry + 9] = 0;
+
+    ireturn;
+endif;
+
+[process_table_entry + 4] = RUNNING;
+
+multipop(BP);
+return;
+

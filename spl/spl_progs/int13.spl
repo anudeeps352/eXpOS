@@ -1,0 +1,142 @@
+// Semget and semrelease routine
+
+
+alias userSP R0;
+alias physicalpageNum R1;
+alias offset R2;
+alias address R3;
+alias syscallno R4;
+alias userAreaPageno R5;
+alias i R6;
+alias free_entry R7;
+alias returnaddress R8;
+alias sem_desc R9;
+alias semtable_index R10;
+userSP=SP;
+//switch to kernel stack
+[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+13]=SP;
+SP=[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+11]*512-1;
+
+//access syscall number from user stack(syscall before arg1)
+physicalpageNum=[PTBR+2*((userSP-5)/512)];
+offset=(userSP-5)%512;
+address=physicalpageNum*512+offset;
+syscallno=[address];
+
+//SEMGET
+if(syscallno==17)then
+    //set mode flag to syscallno
+    [PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1])*16+9]=17;
+    userAreaPageno=[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1])*16+11];
+    free_entry=-1;
+    i=496;
+    while(i<=511)do
+        if([userAreaPageno*512+i]==-1)then
+            free_entry=i;
+            break;
+        endif;
+        i=i+2;
+    endwhile;
+
+    if(free_entry==-1)then
+        //set return value as -1
+        returnaddress=([PTBR + 2 * ((userSP - 1) / 512)] * 512) + ((userSP - 1) % 512);
+        [returnaddress]=-1;
+
+        //change mode flag back to zero
+        [PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;
+
+        //set stack pointer back to user
+        SP = userSP;
+        ireturn;
+    endif;    
+
+    sem_desc=(i-496)/2;
+    [userAreaPageno*512+sem_desc]=1;
+    multipush(R0,R1,R2,R3,R4,R5,R6,R7,R8,R9);
+        R1=6;
+        R2=[SYSTEM_STATUS_TABLE+1];
+        call MOD_0;
+        semtable_index=R0;
+    multipop(R0,R1,R2,R3,R4,R5,R6,R7,R8,R9);
+
+    if(semtable_index==-1)then  
+        //set return value as -2
+        returnaddress=([PTBR + 2 * ((userSP - 1) / 512)] * 512) + ((userSP - 1) % 512);
+        [returnaddress]=-2;
+
+        //set mode flag to zero
+        [PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;
+
+        //set stack pointer back to user
+        SP = userSP;
+        ireturn;
+    endif;
+
+    //set value of per process resource table sem id 
+    [userAreaPageno*512+free_entry+1]=semtable_index;
+
+    //change back stack and return to user mode
+    SP = [PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13];
+
+	//restoring mode flag
+	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;
+
+	//Setting return value to semaphore descriptor Index in per-process resource table
+	returnaddress = ([PTBR + 2 * ((userSP - 1) / 512)] * 512) + ((userSP - 1) % 512);
+	[returnaddress] = sem_desc;
+	ireturn; 
+endif;
+
+//sem release
+    if(syscallno==18)then 
+        //Setting mode flag to system call number
+	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 18;
+    breakpoint;
+    userAreaPageno = [PROCESS_TABLE+(16*[SYSTEM_STATUS_TABLE+1])+11];
+
+	physicalpageNum = [PTBR + 2 * ((userSP - 4)/ 512)];
+	offset = (userSP - 4) % 512;
+	address = (physicalpageNum * 512) + offset;
+
+    sem_desc=[address];
+
+    if(sem_desc<0 || sem_desc >7 || ([userAreaPageno*512+(sem_desc*2+496)]!=-1))then
+
+        //Setting return value as -1
+		
+		returnaddress = ([PTBR + 2 * ((userSP - 1) / 512)] * 512) + ((userSP - 1) % 512);
+		[returnaddress] = -1;
+
+        //reset mode flag (0 indicates process is in user mode).
+		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;
+		
+		//changing back to user stack
+		SP = userSP;
+
+		ireturn;
+    endif;
+
+     multipush(R0,R1,R2,R3,R4,R5,R6,R7,R8,R9,R10);
+        R1=7; //release semaphore in MOD_1
+		R2=[SYSTEM_STATUS_TABLE+1]; //PID of current process
+		R3=[userAreaPageno * 512 + ((sem_desc * 2) + 496)+1];
+		call MOD_0;   
+
+        if(R0==-1)then 
+            print "semtableindexerr";
+        endif;
+     multipop(R0,R1,R2,R3,R4,R5,R6,R7,R8,R9,R10);    
+     [userAreaPageno*512+((sem_desc*2)+496)]=-1;
+
+     //change back to user stack
+     SP = [PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13];
+
+	 //restoring mode flag
+	 [PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;  
+
+     //set return value to zero
+        returnaddress=([PTBR + 2 * ((userSP - 1) / 512)] * 512) + ((userSP - 1) % 512);
+        [returnaddress]=0;
+    ireturn;
+endif;         

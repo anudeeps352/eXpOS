@@ -1,0 +1,63 @@
+type
+list
+{
+	int data;
+	list next;
+}		  
+endtype
+
+decl
+	list prev,head,x;
+enddecl
+
+int main()
+{
+decl
+	int num,temp,i,size,start,val;
+enddecl
+
+begin
+	start=0;
+	
+	temp=exposcall("'Write",-2,"Size :");
+	temp=exposcall("Read",-1,size);
+	val=initialize();
+	
+	i=0;
+	while(i<size) do
+		temp=exposcall("Read",-1,num);
+		x=alloc();
+		x.data=num;
+		x.next=null;
+		if(start==0) then
+			head=x;
+			prev=x;
+			start=1;
+		else
+			prev.next=x;
+			prev=x;
+		endif;
+		i=i+1;
+	endwhile;
+		
+	i=0;
+	while(i<size) do
+		num=head.data;
+		temp=exposcall("'Write",-2,num);
+		head=head.next;
+		i=i+1;
+	endwhile;
+	
+return 0;
+end
+}
+
+
+
+
+
+
+
+
+
+

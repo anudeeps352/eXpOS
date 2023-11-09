@@ -1,0 +1,46 @@
+decl
+	int num,temp,i;
+	int prime(int n);
+enddecl
+
+int prime(int n)
+{
+decl
+	int flag;
+enddecl
+begin
+	i=2;
+	flag=0;
+	while(i<=(n/2)) do
+		if((n%i)==0) then
+			flag=1;
+		endif;
+	i=i+1;
+	endwhile;
+	return flag;
+end
+}
+
+
+
+
+
+
+int main()
+{
+decl
+	str s;
+enddecl
+begin
+	num=2;
+	s="PRIME";
+	while(num<=100) do
+		if(prime(num)==0) then
+			temp=exposcall("Write",-2,num);
+		endif;
+		num=num+1;
+	endwhile;
+	return 0;
+end
+}
+

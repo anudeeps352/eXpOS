@@ -1,0 +1,218 @@
+//syscalls for newyser,rmuser,setpass
+
+alias userSP R1;
+alias pagetable R2;
+alias currentPID R3;
+alias returnaddress R4;
+alias syscallNum R5;
+alias currentUserID R6;
+alias username R7;
+
+alias index R9;
+
+userSP = SP;
+pagetable = PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1]*16;
+
+currentPID = [SYSTEM_STATUS_TABLE + 1];
+returnaddress = [[pagetable + 14] + 2*((userSP-1)/512)] * 512 + ((userSP - 1)%512);
+
+syscallNum = [[[pagetable + 14] + 2*((userSP-5)/512)] * 512 + ((userSP - 5)%512)];
+
+currentUserID = [pagetable+3];
+username = [[[pagetable + 14] + 2*((userSP-4)/512)] * 512 + ((userSP - 4)%512)];
+
+
+//setting mode flag and switching to kernel stack
+[pagetable + 9] = syscallNum;
+[pagetable + 13] = SP;
+SP = [pagetable + 11] * 512 - 1;
+
+
+if(syscallNum == 22) then                   //Newusr
+
+	alias pass R8;
+	pass = [[[pagetable + 14] + 2*((userSP-3)/512)] * 512 + ((userSP - 3)%512)];
+	
+	//if current user is not root or the current process is not shell
+	if(currentUserID != 1 || currentPID != 2) then
+		[returnaddress] = -2;
+		SP = [pagetable + 13];
+		[pagetable + 9] = 0;
+		ireturn;
+	endif;
+	
+	//loop through user table to find free entry
+	index = 0;
+	while(index < MAX_USER_NUM) do
+		if([USER_TABLE + 2*index] == -1) then
+			break;
+		endif;
+		index = index + 1;
+	endwhile;
+	
+	if(index == MAX_USER_NUM) then
+		[returnaddress] = -3;
+		SP = [pagetable + 13];
+		[pagetable + 9] = 0;
+		ireturn;
+	endif;
+	
+	encrypt pass;
+	
+	[USER_TABLE + 2*index] = username;
+	[USER_TABLE + 2*index + 1] = pass;
+	
+	[returnaddress] = 0;
+	
+endif;
+
+
+if(syscallNum == 23) then       //Remusr
+	
+	//if current user is not root or the current process is not shell
+	if(currentUserID != 1 || currentPID != 2) then
+		[returnaddress] = -2;
+		SP = [pagetable + 13];
+		[pagetable + 9] = 0;
+		ireturn;
+	endif;
+	
+	//if user to be removed is root or kernel then return -2
+	if(username == "root" || username == "kernel") then
+		[returnaddress] = -2;
+		SP = [pagetable + 13];
+		[pagetable + 9] = 0;
+		ireturn;
+	endif;
+	
+	//loop through user table to find corresponding entry
+	index = 0;
+	while(index < MAX_USER_NUM) do
+		if([USER_TABLE + 2*index] == username) then
+			break;
+		endif;
+		index = index + 1;
+	endwhile;
+	
+	if(index == MAX_USER_NUM) then
+		[returnaddress] = -1;
+		SP = [pagetable + 13];
+		[pagetable + 9] = 0;
+		ireturn;
+	endif;
+	
+	alias user_tb_entry R10;
+	user_tb_entry = USER_TABLE + 2*index;
+	
+	//loop through root file and check if a file of the user to be deleted exists
+	index = 0;
+	while(index < MAX_FILE_NUM) do
+		if([ROOT_FILE + index*8 + 3] == username && [ROOT_FILE + index*8] !=-1) then
+			[returnaddress] = -3;
+			SP = [pagetable + 13];
+			[pagetable + 9] = 0;
+			ireturn;
+		endif;
+		index = index + 1;
+	endwhile;
+	
+	[user_tb_entry] = -1;
+	[user_tb_entry + 1] = -1;
+	
+	[returnaddress] = 0;	
+	
+endif;
+
+//Setpass
+if(syscallNum == 24) then
+
+	alias pass R8;
+	pass = [[[pagetable + 14] + 2*((userSP-3)/512)] * 512 + ((userSP - 3)%512)];
+	
+	//if the current process is not shell
+	if(currentPID != 2) then
+		[returnaddress] = -2;
+		SP = [pagetable + 13];
+		[pagetable + 9] = 0;
+		ireturn;
+	endif;
+	
+	//loop through user table to find corresponding entry
+	index = 0;
+	while(index < MAX_USER_NUM) do
+		if([USER_TABLE + 2*index] == username) then
+			break;
+		endif;
+		index = index + 1;
+	endwhile;
+	
+	if(index == MAX_USER_NUM) then
+		[returnaddress] = -2;
+		SP = [pagetable + 13];
+		[pagetable + 9] = 0;
+		ireturn;
+	endif;
+	
+	//if not root and not current user
+	if([pagetable + 3] != index && [pagetable+3] != 1) then
+		[returnaddress] = -1;
+		SP = [pagetable + 13];
+		[pagetable + 9] = 0;
+		ireturn;
+	endif;
+	
+	encrypt pass;
+	[USER_TABLE + 2*index + 1] = pass;
+	
+	[returnaddress] = 0;
+	
+endif;
+
+//Getuname
+if(syscallNum == 25) then
+	
+	alias userID R7;	
+	
+	
+	if(userID < 0 || userID > 15) then
+		[returnaddress] = -1;
+		SP = [pagetable + 13];
+		[pagetable + 9] = 0;
+		ireturn;
+	endif;
+	
+	if([USER_TABLE + userID*2] == -1) then
+		[returnaddress] = -1;
+		SP = [pagetable + 13];
+		[pagetable + 9] = 0;
+		ireturn;
+	endif;
+	
+	[returnaddress] = [USER_TABLE + userID*2];
+endif;
+
+//Getuid
+if(syscallNum == 26) then
+	
+	//loop through user table to find corresponding entry
+	index = 0;
+	while(index < MAX_USER_NUM) do
+		if([USER_TABLE + 2*index] == username) then
+			[returnaddress] = index;
+			break;
+		endif;
+		index = index + 1;
+	endwhile;
+	
+	if(index == MAX_USER_NUM) then
+		[returnaddress] = -1;
+		SP = [pagetable + 13];
+		[pagetable + 9] = 0;
+		ireturn;
+	endif;
+	
+endif;
+
+SP = [pagetable + 13];
+[pagetable + 9] = 0;
+ireturn;

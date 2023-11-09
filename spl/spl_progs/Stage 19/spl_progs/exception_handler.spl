@@ -1,0 +1,81 @@
+[PROCESS_TABLE + 16 *[SYSTEM_STATUS_TABLE + 1] + 9] = -1;		//Setting Mode Flag to -1 to indicate exception handler
+alias userSP R0;
+userSP =SP;
+breakpoint;
+[PROCESS_TABLE + 16 *[SYSTEM_STATUS_TABLE + 1] + 13]= SP;
+SP = [PROCESS_TABLE + 16 *[SYSTEM_STATUS_TABLE + 1] + 11]* 512 -1 ;	//Switching to kernel stack
+
+backup;
+multipush(EIP);								//Backing up EIP
+
+
+
+if(EC!=0 || userSP==(PTLR*512-1)) then					//User Stack full OR exceptions other than page fault
+
+	if(EC != 0) then
+		print "Exception";
+		breakpoint;
+	endif;
+	
+	if(userSP == (PTLR*512 - 1)) then
+		print "UserStack Full";
+	endif;
+	
+	multipush(R0,R1,R2);
+	R1 = 3;								//Function number for Exit Process in Process Manager
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	call MOD_1;
+	multipop(R0,R1,R2);
+	multipush(R0,R1,R2);	
+	call SCHEDULER;							//Invoking Scheduler after exiting current process
+	multipop(R0,R1,R2);	
+endif;
+
+
+if(EC == 0 ) then							//Page Fault
+	
+	if(EPN == 4 || EPN == 5 || EPN == 6 || EPN == 7) then				//Page Fault due to code page
+		alias blockno R2; 
+		blockno = [DISK_MAP_TABLE + 10*[SYSTEM_STATUS_TABLE + 1] + EPN];
+		multipush(R1,R2);
+		R1 = 5;							//Get Code Page function in Memory Manager
+		call MOD_2;
+		multipop(R1,R2);
+		[PAGE_TABLE_BASE + 20*[SYSTEM_STATUS_TABLE + 1] + 2*EPN ] = R0;		//Updating Page Table entries
+		[PAGE_TABLE_BASE + 20*[SYSTEM_STATUS_TABLE + 1] + 2*EPN + 1]= "1100";
+	endif;
+	
+	
+	if(EPN == 2 || EPN ==3) then						//Page Fault due to Heap Page
+		multipush(R1,R2,R3);					
+		R1 = 1;								//Get Free Page function in Memory Manager
+		call MOD_2;
+		multipop(R1,R2,R3);	
+		
+		[PAGE_TABLE_BASE + 20*[SYSTEM_STATUS_TABLE + 1] + 2*2 ] = R0;	
+		[PAGE_TABLE_BASE + 20*[SYSTEM_STATUS_TABLE + 1] + 2*2 + 1] = "1110";
+		
+		multipush(R1,R2,R3);
+		R1 = 1;
+		call MOD_2;
+		multipop(R1,R2,R3);
+			
+		[PAGE_TABLE_BASE + 20*[SYSTEM_STATUS_TABLE + 1] + 2*3 ] = R0;	
+		[PAGE_TABLE_BASE + 20*[SYSTEM_STATUS_TABLE + 1] + 2*3 + 1] = "1110";		
+	endif;
+endif;
+
+
+[PROCESS_TABLE + 16 *[SYSTEM_STATUS_TABLE + 1] + 9] = 0;			//Changing Mode Bit to 0
+multipop(EIP);			
+restore;
+
+SP = [PROCESS_TABLE + 16 *[SYSTEM_STATUS_TABLE + 1] + 13];
+SP =SP + 1;
+
+[[PAGE_TABLE_BASE + 20*[SYSTEM_STATUS_TABLE + 1]+ 2*(SP/512)]*512 +(SP%512)] = EIP;
+ireturn;
+	
+	
+	
+	

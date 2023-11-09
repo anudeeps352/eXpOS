@@ -1,0 +1,104 @@
+//Loading library from disk to memory
+loadi(63,13);
+loadi(64,14);
+
+//Loading module 7 from disk to memory
+loadi(54,67);
+loadi(55,68);
+
+//Loading int10 module from disk to memory
+loadi(22,35);
+loadi(23,36);
+
+//Loading int7 from disk to memory
+loadi(16,29);
+loadi(17,30);
+
+//Loading idle code from disk to memory
+loadi(69,11);
+loadi(70,12);
+
+//Loading exception handler routine from disk to memory
+loadi(2,15);
+loadi(3,16);
+
+//Loading timer interrupt routine
+loadi(4,17);
+loadi(5,18);
+
+
+//Setting SP to user area page of idle process
+SP = 82*512 - 1;
+
+//calling module 7
+call BOOT_MODULE;
+
+
+
+
+
+
+
+
+
+
+//Setting up Page Table for idle process
+PTBR=PAGE_TABLE_BASE;
+PTLR=10;
+
+
+//Library
+[PTBR+0]=63;
+[PTBR+1]="0100";
+[PTBR+2]=64;
+[PTBR+3]="0100";
+
+//Heap
+[PTBR+4]=-1;
+[PTBR+5]="0000";
+[PTBR+6]=-1;
+[PTBR+7]="0000";
+
+//Code
+[PTBR+8]=69;
+[PTBR+9]="0100";
+[PTBR+10]=70;
+[PTBR+11]="0100";
+[PTBR+12]=-1;
+[PTBR+13]="0000";
+[PTBR+14]=-1;
+[PTBR+15]="0000";
+
+//Stack
+[PTBR+16]=81;
+[PTBR+17]="0110";
+[PTBR+18]=-1;
+[PTBR+19]="0000";
+
+
+
+
+
+
+//Process Table for idle process
+[PROCESS_TABLE]=0;	                   //Tick
+[PROCESS_TABLE + 11]=82;                   //User area page for idle processs
+[PROCESS_TABLE + 4]=RUNNING;               //State for idle process
+[PROCESS_TABLE + 1]=0;	                   //PID for idle process
+[PROCESS_TABLE + 13]=8*512;           	   //UPTR for idle process
+[PROCESS_TABLE + 12]=0;                    //KPTR for idle process
+[PROCESS_TABLE + 14]=PAGE_TABLE_BASE;      //PTBR for idle process
+[PROCESS_TABLE +15]=10;                    //PTLR for idle process
+
+[81*512]=[69*512 + 1];                     //Setting entry point IP value in header file of idle program to top of its user stack
+
+
+
+//Initialising Stack Pointer for idle program
+SP=8*512;
+
+
+
+//Setting system status table PID as 0 for idle program
+[SYSTEM_STATUS_TABLE + 1]=0;
+ireturn;

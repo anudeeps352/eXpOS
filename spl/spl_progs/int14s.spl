@@ -1,0 +1,115 @@
+//_________________________________INTERRUPT 14____________________________________
+//__________________________SEMLOCK, SEMUNLOCK syscalls____________________________
+alias userSP R0;
+alias currentPID R1;
+alias current_process_table R2;
+alias current_User_Page R3;
+
+alias syscallNum R5;
+alias i R6;
+alias sem_id R7;
+alias sem_desc_ind R8;
+
+currentPID = [SYSTEM_STATUS_TABLE + 1];
+current_process_table = PROCESS_TABLE + currentPID*16;
+current_User_Page = [current_process_table + 11];
+
+userSP = SP;
+[current_process_table + 13] = SP;
+SP = [current_process_table + 11]*512 - 1;
+
+syscallNum = [[PTBR + 2*((userSP-5)/512)]*512 + (userSP-5)%512];
+
+//breakpoint;
+
+
+//-------------------------------SemLock system call----------------------------------
+if(syscallNum == 19) then
+	[current_process_table + 9] = 19;	//MODE = syscall number
+	sem_desc_ind = [[PTBR + 2*((userSP-4)/512)]*512 + (userSP-4)%512];
+
+	if(sem_desc_ind < 0 || sem_desc_ind > 7 || [current_User_Page*512 + 2*sem_desc_ind + 496] != SEMAPHORE) then
+	//sem_desc_ind is invalid
+		[[PTBR + 2*((userSP-1)/512)]*512 + (userSP-1)%512] = -1;    //Failure
+
+		[current_process_table + 9] = 0;
+        SP = [current_process_table + 13];
+        ireturn;
+
+	else	
+	//sem_desc_ind is valid
+		sem_id = [current_User_Page*512 + (2*sem_desc_ind) + 496 + 1];
+		while([SEMAPHORE_TABLE + 4*sem_id + 0] != -1 && [SEMAPHORE_TABLE + 4*sem_id + 0] != currentPID) do
+			[current_process_table + 4] = WAIT_SEMAPHORE;
+			[current_process_table + 5] = sem_id;
+
+			backup;		//instead of multipush
+			call SCHEDULER;
+			restore;` 	//instead of multipop
+		endwhile;
+
+		[SEMAPHORE_TABLE + 4*sem_id + 0] = currentPID;
+
+		[[PTBR + 2*((userSP-1)/512)]*512 + (userSP-1)%512] = 0;     //Success
+
+        [current_process_table + 9] = 0;
+        SP = [current_process_table + 13];
+        ireturn;	
+	endif;
+endif;
+//-----------------------------------Done SemLock----------------------------------------------------------
+
+
+//-------------------------------SemUnLock syscall---------------------------------------------
+if(syscallNum == 20) then
+	[current_process_table + 9] = 20;   //MODE = syscall number
+
+	sem_desc_ind = [[PTBR + 2*((userSP-4)/512)]*512 + (userSP-4)%512];
+
+        if(sem_desc_ind < 0 || sem_desc_ind > 7 || [current_User_Page*512 + 2*sem_desc_ind + 496] != SEMAPHORE) then
+        //sem_desc_ind is invalid
+                [[PTBR + 2*((userSP-1)/512)]*512 + (userSP-1)%512] = -1;    //Failure
+
+                [current_process_table + 9] = 0;
+                SP = [current_process_table + 13];
+                ireturn;
+        
+        else	
+        //sem_desc_ind is valid
+            sem_id = [current_User_Page*512 + (2*sem_desc_ind) + 496 + 1];
+		    
+		    if([SEMAPHORE_TABLE + 4*sem_id + 0] != currentPID) then
+		    //semaphore to be unlocked is not locked by the current process
+			    [[PTBR + 2*((userSP-1)/512)]*512 + (userSP-1)%512] = -2;
+
+			    [current_process_table + 9] = 0;
+                SP = [current_process_table + 13];
+                ireturn;
+		    
+		    else
+		    //semaphore to be unlocked by the current process
+			    [SEMAPHORE_TABLE + 4*sem_id + 0] = -1;
+
+			    i = 0;
+			    while(i < MAX_PROC_NUM) do
+                	if([PROCESS_TABLE + i*16 + 4] == WAIT_SEMAPHORE  && [PROCESS_TABLE + i*16 + 5] == sem_id) then
+                  	    [PROCESS_TABLE + i*16 + 4] = READY;
+                    endif;
+			        i = i + 1;
+                endwhile;
+
+			    [[PTBR + 2*((userSP-1)/512)]*512 + (userSP-1)%512] = 0;
+                [current_process_table + 9] = 0;
+                SP = [current_process_table + 13];
+                ireturn;
+		    endif;
+	endif;
+
+endif;
+//-----------------------------------Done SemUnLock----------------------------------------------------------
+
+//if syscalNum matches with none
+[current_process_table + 9] = 0;
+SP = [current_process_table + 13];
+ireturn;
+

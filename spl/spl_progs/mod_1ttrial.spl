@@ -1,0 +1,112 @@
+//Process Manager Module
+
+alias functionNum R1;
+alias currentPID R2;
+PTBR=[PROCESS_TABLE + currentPID*16 + 14];
+if(functionNum==2)then
+    breakpoint;
+	print "enteringproce2";
+    alias userAreaPageNo R3;
+    userAreaPageNo=[PROCESS_TABLE+currentPID*16+11];
+    multipush(R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15);
+    R1=2;
+	R2=userAreaPageNo;
+	call MOD_2;
+    multipop(R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15);
+	print "exitingproc2";
+    return;
+endif;
+
+if(functionNum==3)then //exitprocess
+    //free pagetable entries
+	print "enteringproc3";
+    multipush(R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15);
+    R1=4;
+    R2=currentPID;
+    call MOD_1;
+    multipop(R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15);
+
+    //free userarea page
+     multipush(R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15);
+    R1=2;
+    R2=currentPID;
+    call MOD_1;
+    multipop(R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15);
+    [PROCESS_TABLE+16*currentPID+4]=TERMINATED;
+	print "exitingproc3";
+    return;
+endif;
+
+//FREE PAGE TABLE
+
+	if(functionNum == 4) then
+	
+		//We shall not de-allocate library pages as they are common for all processe
+		
+		alias page R3;
+		page=2;						//Library Pages need not be freed
+		
+		if([DISK_MAP_TABLE + 10*currentPID+ 2] != -1) then	//Heap Page 1
+    			multipush(R1,R2,R3,R4);
+    			R1 = 4;					//Function number for release block in memory manager												
+    			R3 = currentPID;
+    			R2 = [DISK_MAP_TABLE + 10*currentPID + 2];
+    			call MOD_2;
+    			multipop(R1,R2,R3,R4);
+    		endif;
+
+    		if([DISK_MAP_TABLE + 10*currentPID + 3] != -1) then	//Heap Page 2
+    			multipush(R1,R2,R3,R4);
+    			R1 = 4;
+    			R3 = currentPID;
+    			R2 = [DISK_MAP_TABLE + 10*currentPID + 3];
+    			call MOD_2;
+    			multipop(R1,R2,R3,R4);
+    		endif;   
+
+    		if([DISK_MAP_TABLE + 10*currentPID + 8] != -1) then	//Stack Page 1
+    			multipush(R1,R2,R3,R4);
+    			R1 = 4;
+    			R3 = currentPID;
+    			R2 = [DISK_MAP_TABLE + 10*currentPID + 8];
+    			call MOD_2;
+    			multipop(R1,R2,R3,R4);
+    		endif;
+
+    		if([DISK_MAP_TABLE + 10*currentPID + 9] != -1) then    //Stack Page 2
+    			multipush(R1,R2,R3,R4);
+    			R1 = 4;
+    			R3 = currentPID;
+    			R2 = [DISK_MAP_TABLE + 10*currentPID + 9];
+    			call MOD_2;
+    			multipop(R1,R2,R3,R4);
+    		endif;   
+    		
+    		alias i R4;
+    		i=0;
+    		while (i<10) do
+    			[DISK_MAP_TABLE + currentPID*10 + i]=-1;
+    			i=i+1;
+    		endwhile;
+    		
+		
+		while(page<10) do
+			if([PTBR + 2*page] != -1) then
+			
+				multipush(R0,R1,R2,R3);			//Function number for RELEASE_PAGE in Memory Manager Module
+				R1=2;
+				R2=[PTBR + 2*page];
+				call MEMORY_MANAGER;
+				multipop(R0,R1,R2,R3);
+				
+				[PTBR + 2*page] = -1;
+				[PTBR + 2*page + 1] = "0000";
+			endif;
+			
+			page=page+1;
+		endwhile;
+		
+		return;
+	endif;
+				
+	

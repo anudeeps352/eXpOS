@@ -1,0 +1,109 @@
+//Interrupt routine for wait,signal,getpid,getppid
+
+alias userSP R0;
+alias physicalpageNum R1;
+alias offset R2;
+alias address R3;
+alias syscallno R4;
+alias returnaddress R5;
+alias reqPID R6;
+alias i R7;
+
+//switch to kernel stack first 
+userSP=SP; //save stack pointer
+[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+13]=SP; //save pointer to process table
+SP=[PROCESS_TABLE+([SYSTEM_STATUS_TABLE +1]*16)+11]*512-1; //change to kernel stack
+
+//extracting System call number from user stack
+physicalpageNum=[PTBR+2*((userSP-5)/512)];  //syscallnumber before arguments
+offset=(userSP-5)%512;
+address=physicalpageNum*512+offset;
+
+syscallno=[address];
+
+if(syscallno==11)then //get pid syscall
+    [PROCESS_TABLE+[SYSTEM_STATUS_TABLE +1]*16+9]=11;
+    returnaddress=([PTBR+2*((userSP-1)/512)]*512)+((userSP-1)%512);     //Access the arugment register pushed into the stack
+    [returnaddress]=[PROCESS_TABLE + 16 * [SYSTEM_STATUS_TABLE+1] + 1]; // then store value of pid 
+    SP=[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+13];                 //  change stack back to userstack
+    ireturn;
+endif;    
+
+if(syscallno==12)then //get ppid syscall
+    [PROCESS_TABLE+[SYSTEM_STATUS_TABLE +1]*16+9]=12;  //set mode flag to syscall
+    returnaddress=([PTBR+2*((userSP-1)/512)]*512)+((userSP-1)%512);     //Access argument regiter pushed into the stack
+    [returnaddress]=[PROCESS_TABLE + 16 * [SYSTEM_STATUS_TABLE+1] + 2]; //store value of ppid
+    SP=[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+13];                 //change back to userstack                        
+    ireturn;
+endif;  
+
+if(syscallno==13)then //wait syscall
+    [PROCESS_TABLE+[SYSTEM_STATUS_TABLE +1]*16+9]=13;  //set mode flag to syscall
+
+    //PID stored as argument 1(extract PID from user stack)
+
+    physicalpageNum=[PTBR+2*((userSP-4)/512)];
+    offset=(userSP-4)%512;
+    address=(physicalpageNum*512)+offset;
+    reqPID=[address];
+
+    //failure condition
+    if(reqPID<0 || reqPID>=16 || reqPID==[SYSTEM_STATUS_TABLE+1] || [PROCESS_TABLE+reqPID*16+4]==TERMINATED)then
+            //setting return value as -1(failure)
+            returnaddress =([PTBR+2*((userSP-1)/512)]*512)+((userSP-1)%512);
+            [returnaddress]=-1;
+
+            //reset mode flag(0 indicates process in user mode);
+            [PROCESS_TABLE + [SYSTEM_STATUS_TABLE +1]*16+9]=0;
+
+            //change back to userstack
+            SP=userSP;
+            ireturn;
+    endif;  
+
+    [PROCESS_TABLE + 16 * [SYSTEM_STATUS_TABLE + 1] + 4] = WAIT_PROCESS;
+    [PROCESS_TABLE + 16 * [SYSTEM_STATUS_TABLE + 1] + 5] = reqPID;
+
+    backup;
+      call MOD_5;
+    restore;
+
+    //restoring mode flag
+      [PROCESS_TABLE+[SYSTEM_STATUS_TABLE+1]*16+9]=0;
+
+    //setting return value to 0
+      returnaddress=([PTBR+2*((userSP-1)/512)]*512)+((userSP-1)%512);
+      [returnaddress]=0;
+
+    SP=[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+13];
+    ireturn;
+
+endif;
+
+if(syscallno==14)then //signal system call i.e signals all waiting processes waiting for current process
+    //setting mode flag to system call no
+        [PROCESS_TABLE+[SYSTEM_STATUS_TABLE +1]*16+9]=14;
+
+    i=0;
+    while(i<=15)do
+        if([PROCESS_TABLE+i*16+4]==WAIT_PROCESS && [PROCESS_TABLE+i*16+5]== [SYSTEM_STATUS_TABLE +1])then
+            [PROCESS_TABLE+4+i*16]=READY;
+        endif;
+        i=i+1;
+    endwhile;
+
+    //restoring mode flag
+    [PROCESS_TABLE+[SYSTEM_STATUS_TABLE+1]*16+9]=0;
+    //setting return value to 0;
+    returnaddress=([PTBR + 2 * ((userSP - 1) / 512)] * 512) + ((userSP - 1) % 512);
+    [returnaddress]=0;
+
+    SP=[PROCESS_TABLE+([SYSTEM_STATUS_TABLE +1]*16)+13];
+    ireturn;
+
+endif;             
+
+
+
+
+

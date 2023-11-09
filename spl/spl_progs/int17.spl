@@ -1,0 +1,75 @@
+//login implementation
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 27;
+alias userSP R0;
+userSP = SP;
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE+1] * 16) +13 ]=SP;
+SP=[PROCESS_TABLE+( [SYSTEM_STATUS_TABLE + 1] * 16)+11 ]*512-1;
+alias currPid R1;
+currPid = [SYSTEM_STATUS_TABLE + 1];
+
+
+
+alias returnaddress R3;
+returnaddress = [PTBR + 2*((userSP-1)/512)]*512 + (userSP-1)%512;
+
+alias UserName R4;
+UserName = [[PTBR + 2*((userSP-4)/512)]*512 + (userSP-4)%512];
+
+if(currPid != 1) then
+    [returnaddress] = -2;                           //If PID of the current process is not 1, return -2.Login process has PID = 1
+    SP = userSP;
+    [PROCESS_TABLE + currPid * 16 + 9] = 0;
+    ireturn;
+endif;
+
+alias password R5;
+password = [[PTBR + 2*((userSP-3)/512)]*512 + (userSP-3)%512];
+
+encrypt password;
+
+alias i R6;
+i = 0;
+
+while(i < MAX_USER_NUM) do
+    if(UserName == [USER_TABLE + 2*i]) then                 //get username entry in user table
+        break;
+    endif;
+    i = i + 1;
+endwhile;
+
+
+if(i == MAX_USER_NUM) then                                  //out of bounds
+    [returnaddress] = -1;
+    SP = userSP;
+    [PROCESS_TABLE + 16*currPid + 9] = 0;
+    ireturn;
+endif;
+
+alias userID R7;
+userID = i;
+
+if([USER_TABLE + 2*i + 1] != password) then                 //encypted input password does not match the ENCRYPTED PASSWORD ,return -1
+    [returnaddress] = -1;
+    SP = userSP;
+    [PROCESS_TABLE + 16*currPid + 9] = 0;
+    ireturn;
+endif;
+
+
+[PROCESS_TABLE + 2*16 + 4] = CREATED;                       //shell process set to created 
+[PROCESS_TABLE + 2*16 + 3] = userID;
+
+[PROCESS_TABLE + 1*16 + 4] = WAIT_PROCESS;                  //login i.e init set to wait
+[PROCESS_TABLE + 1*16 + 5] = 2;
+
+[SYSTEM_STATUS_TABLE] = userID;                             //set current user
+
+backup;
+call SCHEDULER;
+restore;
+
+[returnaddress] = 0;                                        //succes code
+[PROCESS_TABLE + currPid*16 + 9] = 0;
+SP = userSP;
+
+ireturn;

@@ -1,0 +1,21 @@
+type
+node
+{
+	int x;
+}
+endtype
+int main()
+{
+decl
+	int temp,num;
+	node b;
+enddecl
+begin
+	temp=initialize();
+	b=alloc();
+	temp=exposcall("Read",-1,num);
+	b.x=num;
+	temp=exposcall("Write",-2,b.x);
+	return 0;
+end
+}

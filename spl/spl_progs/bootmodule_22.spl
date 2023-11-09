@@ -1,0 +1,217 @@
+//Loading library from disk to memory
+loadi(63,13);
+loadi(64,14);
+
+//Loading init from disk to memory
+loadi(65,7);
+loadi(66,8);
+
+//Loading int10 module from disk to memory
+loadi(22,35);
+loadi(23,36);
+
+//Loading int7 from disk to memory
+loadi(16,29);
+loadi(17,30);
+
+//Loading int6 from disk to memory
+loadi(14,27);
+loadi(15,28);
+
+//Loading int9 from disk to memory
+loadi(20,33);
+loadi(21,34);
+
+//Loading exception handler routine from disk to memory
+loadi(2,15);
+loadi(3,16);
+
+//Loading timer interrupt routine
+loadi(4,17);
+loadi(5,18);
+
+//Loading console interrupt routine
+loadi(8,21);
+loadi(9,22);
+
+//Loading disk interrupt routine
+loadi(6,19);
+loadi(7,20);
+
+//Loading module 5 from disk to memory
+loadi(50,63);
+loadi(51,64);
+
+//Loading module 0
+loadi(40,53);
+loadi(41,54);
+
+//Loading module 4
+loadi(48,61);
+loadi(49,62);
+
+//Loading module 1
+loadi(42,55);
+loadi(43,56);
+
+//Loading module 2
+loadi(44,57);
+loadi(45,58);
+
+//Loading Inode table
+loadi(59,3);
+loadi(60,4);
+
+//Loading Disk Free List
+loadi(61,2);
+
+//loading interrupt 8
+loadi(18,31);
+loadi(19,32);
+
+// loading Interrupt 11
+loadi(24,37);
+loadi(25,38);
+
+//loading interrupt 15
+loadi(32,45);
+loadi(33,46);
+
+
+//laoding interrupt 13
+loadi(28,41);
+loadi(29,42);
+
+//laoding interrupt 14
+loadi(30,43);
+loadi(31,44);
+
+
+//Initialising status in terminal status table as 0
+[TERMINAL_STATUS_TABLE]=0;
+
+
+
+//Setting up Page Table for init program
+PTBR=PAGE_TABLE_BASE+20;
+PTLR=10;
+
+
+//Library
+[PTBR+0]=63;
+[PTBR+1]="0100";
+[PTBR+2]=64;
+[PTBR+3]="0100";
+
+//Heap
+[PTBR+4]=78;
+[PTBR+5]="0110";
+[PTBR+6]=79;
+[PTBR+7]="0110";
+
+//Code
+[PTBR+8]=65;
+[PTBR+9]="0100";
+[PTBR+10]=66;
+[PTBR+11]="0100";
+[PTBR+12]=-1;
+[PTBR+13]="0000";
+[PTBR+14]=-1;
+[PTBR+15]="0000";
+
+//Stack
+[PTBR+16]=76;
+[PTBR+17]="0110";
+[PTBR+18]=77;
+[PTBR+19]="0110";
+
+//paste here 1
+
+
+
+
+
+
+
+//Process table for init process
+[PROCESS_TABLE + 16]=0;
+[PROCESS_TABLE + 16 + 11]=80;                  //User area page for init process
+[PROCESS_TABLE + 16 + 4]=CREATED;              //State for init process
+[PROCESS_TABLE + 16 + 1]=1;                    //PID for init process
+[PROCESS_TABLE + 16 +13]=8*512;	       //UPTR for init process
+[PROCESS_TABLE + 16 +12]=0;                    //KPTR for init process
+[PROCESS_TABLE + 16 +14]=PAGE_TABLE_BASE+20;   //PTBR for init process
+[PROCESS_TABLE + 16 +15]=10;                   //PTLR for init process
+
+[76*512]=[65*512 + 1];
+
+
+
+//Disk Map Table for init
+[DISK_MAP_TABLE + 10*1 + 0] = -1;
+[DISK_MAP_TABLE + 10*1 + 1] = -1;
+[DISK_MAP_TABLE + 10*1 + 2] = -1;
+[DISK_MAP_TABLE + 10*1 + 3] = -1;
+[DISK_MAP_TABLE + 10*1 + 4] = 7;
+[DISK_MAP_TABLE + 10*1 + 5] = 8;
+[DISK_MAP_TABLE + 10*1 + 6] = -1;
+[DISK_MAP_TABLE + 10*1 + 7] = -1;
+[DISK_MAP_TABLE + 10*1 + 8] = -1;
+[DISK_MAP_TABLE + 10*1 + 9] = -1;
+
+
+//Setting up Per-Process Table in User Area page of init process and invalidating all entries by default
+alias j R3;
+j=496;
+while(j<512) do
+	[80*512 + j]=-1;
+	j = j+2;
+endwhile;
+
+
+
+//Initialising Semaphore table
+alias i R0;
+i=0;
+while(i<32) do
+	[SEMAPHORE_TABLE+i*4+0]=-1;
+	[SEMAPHORE_TABLE+i*4+1]=0;
+	i=i+1;
+endwhile;
+
+i=2;
+while(i<16) do
+	[PROCESS_TABLE + (i*16) +4] = TERMINATED;
+	i=i+1;
+endwhile;
+
+
+R1=512*57;			//R1 holds address of MEM_FREE_LIST
+alias count R2;
+count=0;
+
+while(count<83) do		//Setting occupied pages is MEM_FREE_LIST to 1
+	[R1+count]=1;
+	count=count+1;
+endwhile;
+
+while(count<128) do		//Setting free pages in MEM_FREE_LIST to 0
+	[R1+count]=0;
+	count=count+1;
+endwhile;
+
+
+[SYSTEM_STATUS_TABLE + 2]=45;			//MEM_FREE_COUNT - There are 45 free pages in memory
+[SYSTEM_STATUS_TABLE + 3]=0;			//WAIT_MEM_COUNT - Initially, no process is waiting for memory pages to be freed
+
+
+[DISK_STATUS_TABLE] = 0;			//Setting status field as 0 to show disk is free
+
+return;
+
+
+
+
+
+
+

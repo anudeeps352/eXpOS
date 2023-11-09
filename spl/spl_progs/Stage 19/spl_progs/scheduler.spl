@@ -1,0 +1,64 @@
+//Obtaining current PID
+alias currPID R15;
+currPID = [SYSTEM_STATUS_TABLE + 1];
+
+//Pushing BP
+multipush(BP);
+
+//Saving Process Table Entries
+[PROCESS_TABLE + (currPID*16) +12] = SP%512;
+[PROCESS_TABLE + (currPID*16) +14] = PTBR;
+[PROCESS_TABLE + (currPID*16) +15] = PTLR;
+
+
+//Finding next available process
+alias i R14;
+alias flag R13;
+alias newPID R12;
+flag=0;
+i = (currPID+1)%16;
+
+while (i!=currPID) do
+	if( [PROCESS_TABLE + (i*16) + 4] == CREATED  ||  [PROCESS_TABLE + (i*16) + 4] == READY ) then
+		flag=1;
+		newPID=i;
+		break;
+	endif;
+	i=(i+1)%16;
+endwhile;
+
+if(newPID==0) then					//If all process except idle are terminated (lines 30-39 not in documentation.Delete if required)
+	i=1;
+	while([PROCESS_TABLE + 16*i + 4]==TERMINATED) do
+		i=i+1;
+	endwhile;
+	
+	if(i==16) then
+		halt;
+	endif;
+endif;
+
+if(flag==0) then
+	newPID=0;
+endif;
+
+
+//Setting SP,PTBR and PTLR of new process
+SP = ([PROCESS_TABLE + (newPID * 16) + 11] * 512)  +  ([PROCESS_TABLE + (newPID * 16) + 12]);
+PTBR = [PROCESS_TABLE + (newPID * 16) + 14];
+PTLR = [PROCESS_TABLE + (newPID * 16) + 15];
+
+//Updating System Status Table
+[SYSTEM_STATUS_TABLE + 1] = newPID;
+
+if ([PROCESS_TABLE + (newPID * 16) + 4] == CREATED) then
+	SP = [PROCESS_TABLE + (newPID * 16) + 13];
+	[PROCESS_TABLE + (newPID * 16) + 4] = RUNNING;
+	[PROCESS_TABLE + (newPID * 16) + 9] = 0;
+	ireturn;
+endif;
+
+
+[PROCESS_TABLE + (newPID * 16) + 4] = RUNNING;
+multipop(BP);
+return;
